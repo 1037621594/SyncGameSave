@@ -1,0 +1,98 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'APK 类型（debug 可直接安装，release 为未签名包）'
+        type: choice
+        required: true
+        default: debug
+        options:
+          - debug
+          - release
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: pwsh
+
+env:
+  BUILD_VARIANT: ${{ inputs.variant || 'debug' }}
+
+jobs:
+  package:
+    name: Package Android APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 34 packages
+        run: |
+          & sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Use installed Gradle: the initial project has no gradle-wrapper.jar.
+      - name: Set up Gradle 8.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.2'
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Assemble APK without tests or lint
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $task = switch ($env:BUILD_VARIANT) {
+            'debug' { ':app:assembleDebug' }
+            'release' { ':app:assembleRelease' }
+            default { throw 'Unsupported APK variant' }
+          }
+          & gradle $task --no-daemon --stacktrace --console=plain -x test -x lint
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncGameSave-${{ env.BUILD_VARIANT }}-${{ github.run_number }}
+          path: app/build/outputs/apk/${{ env.BUILD_VARIANT }}/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Write package summary
+        run: |
+          $lines = @(
+            '## Android APK',
+            '',
+            "- Variant: $env:BUILD_VARIANT",
+            '- Download the APK from the Artifacts section of this workflow run.',
+            '- No unit tests, instrumented tests, lint, emulator or application execution is included.'
+          )
+          if ($env:BUILD_VARIANT -eq 'release') {
+            $lines += '- The release APK is unsigned. Sign it before installing or distributing.'
+          } else {
+            $lines += '- The debug APK uses the runner-generated debug key; keys can differ between runs.'
+          }
+          $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
