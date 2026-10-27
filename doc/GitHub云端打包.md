@@ -25,7 +25,7 @@
 - 只执行 APK assemble，显式排除 `test` 和 `lint`；不运行应用、模拟器或设备测试。
 - Gradle 由 `gradle/actions/setup-gradle` 安装，直接调用 `gradle`，不依赖初始工程缺失的 `gradle-wrapper.jar`，也不需要 Linux `gradlew`。
 - 只需仓库默认 `GITHUB_TOKEN` 的代码读取权限，不需要把本机 SSH 私钥上传到 Actions Secrets。
-- 七牛凭证仍在安装后的应用内填写，未写入流水线或构建产物。
+- S3 凭证仍在安装后的应用内填写，未写入流水线或构建产物。
 
 此次配置不会在本机执行项目构建。工作流推送到 GitHub 后由 GitHub Runner 执行打包；产物是否构建成功以 Actions 的实际结果为准。
 

@@ -10,7 +10,7 @@ import com.example.syncgamesave.model.ConflictRequest;
 import com.example.syncgamesave.model.PathMapping;
 import com.example.syncgamesave.model.SyncResult;
 import com.example.syncgamesave.model.TaskStatus;
-import com.example.syncgamesave.storage.QiniuClient;
+import com.example.syncgamesave.storage.S3Client;
 import com.example.syncgamesave.storage.TreeFiles;
 import java.util.HashMap;
 import java.util.Map;
@@ -77,7 +77,7 @@ public class SyncController {
                 mapping.setInterrupted(true);
                 mapping.setLastDirection(download ? "download" : "upload");
                 repository.saveMapping(mapping);
-                try (QiniuClient client = new QiniuClient(configStore.read(), token)) {
+                try (S3Client client = new S3Client(configStore.read(), token)) {
                     SyncEngine engine = new SyncEngine(repository, files, client, token,
                             (message, done, total) -> publish(mapping.getId(), message, done, total), this::confirm);
                     outcome = download ? engine.download(mapping) : engine.upload(mapping);

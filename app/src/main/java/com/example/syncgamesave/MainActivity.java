@@ -22,7 +22,7 @@ import com.example.syncgamesave.model.SyncResult;
 import com.example.syncgamesave.model.TaskStatus;
 import com.example.syncgamesave.sync.SyncController;
 import com.example.syncgamesave.ui.MappingEditorActivity;
-import com.example.syncgamesave.ui.QiniuConfigActivity;
+import com.example.syncgamesave.ui.S3ConfigActivity;
 import com.example.syncgamesave.ui.Ui;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.card.MaterialCardView;
@@ -69,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
         navigation.setNavigationItemSelectedListener(item -> {
             drawer.closeDrawer(GravityCompat.START);
             if (item.getItemId() == R.id.menu_add_path) editMapping(null);
-            else if (item.getItemId() == R.id.menu_qiniu_config) editConfig();
+            else if (item.getItemId() == R.id.menu_s3_config) editConfig();
             return false;
         });
         controller.changes().observe(this, revision -> { render(); uploadPending(); });
@@ -100,8 +100,8 @@ public class MainActivity extends AppCompatActivity {
             recover.setEnabled(!controller.isBusy());
         }
         if (mappings.isEmpty()) {
-            Ui.text(container, "尚未添加同步路径。先设置七牛连接，再添加本地目录。", 16);
-            Ui.button(container, "七牛配置", this::editConfig);
+            Ui.text(container, "尚未添加同步路径。先设置 S3 连接，再添加本地目录。", 16);
+            Ui.button(container, "S3 配置", this::editConfig);
             Ui.button(container, "添加路径", () -> editMapping(null));
         }
         for (PathMapping mapping : mappings) addCard(mapping);
@@ -193,12 +193,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void editConfig() {
         if (controller.isBusy()) { toast("请等待当前任务完成"); return; }
-        configEditor.launch(new Intent(this, QiniuConfigActivity.class));
+        configEditor.launch(new Intent(this, S3ConfigActivity.class));
     }
 
     private void delete(PathMapping mapping) {
         new MaterialAlertDialogBuilder(this).setTitle("删除“" + mapping.getName() + "”？")
-                .setMessage("仅删除映射及本地同步记录，保留本地文件和七牛对象。")
+                .setMessage("仅删除映射及本地同步记录，保留本地文件和云端对象。")
                 .setNegativeButton("取消", null).setPositiveButton("删除配置", (dialog, which) -> {
                     if (controller.isBusy()) { toast("请等待任务完成"); return; }
                     app.repository().deleteMapping(mapping.getId());

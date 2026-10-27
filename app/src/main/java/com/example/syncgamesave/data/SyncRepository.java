@@ -95,7 +95,7 @@ public class SyncRepository extends SQLiteOpenHelper {
             db.delete("files", null, null);
             for (PathMapping mapping : mappings()) {
                 mapping.setLastUploadTime(0);
-                mapping.setLastResult("七牛目标已变更，等待重新上传");
+                mapping.setLastResult("存储目标已变更，等待重新上传");
                 saveMapping(mapping);
             }
             db.setTransactionSuccessful();

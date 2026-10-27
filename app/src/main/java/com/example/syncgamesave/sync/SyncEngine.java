@@ -7,7 +7,7 @@ import com.example.syncgamesave.model.LocalFile;
 import com.example.syncgamesave.model.PathMapping;
 import com.example.syncgamesave.model.RemoteFile;
 import com.example.syncgamesave.model.SyncResult;
-import com.example.syncgamesave.storage.QiniuClient;
+import com.example.syncgamesave.storage.ObjectStorage;
 import com.example.syncgamesave.storage.TreeFiles;
 import com.example.syncgamesave.storage.PathRules;
 import java.io.File;
@@ -23,12 +23,12 @@ public class SyncEngine {
 
     private final SyncRepository repository;
     private final TreeFiles files;
-    private final QiniuClient remote;
+    private final ObjectStorage remote;
     private final CancellationToken token;
     private final Progress progress;
     private final Confirmer confirmer;
 
-    public SyncEngine(SyncRepository repository, TreeFiles files, QiniuClient remote,
+    public SyncEngine(SyncRepository repository, TreeFiles files, ObjectStorage remote,
                       CancellationToken token, Progress progress, Confirmer confirmer) {
         this.repository = repository;
         this.files = files;

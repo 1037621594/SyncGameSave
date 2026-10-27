@@ -10,6 +10,5 @@ public class FileDigest {
     private File file;
     private long size;
     private String sha256;
-    private String etag;
-    private long crc32;
+    private String md5;
 }
