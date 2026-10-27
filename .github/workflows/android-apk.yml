@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       variant:
-        description: 'APK 类型（debug 可直接安装，release 为未签名包）'
+        description: 'APK 类型（均使用固定开发签名，可安装）'
         type: choice
         required: true
         default: debug
@@ -93,10 +93,6 @@ jobs:
             '- Download the APK from the Artifacts section of this workflow run.',
             '- No unit tests, instrumented tests, lint, emulator or application execution is included.'
           )
-          if ($env:BUILD_VARIANT -eq 'release') {
-            $lines += '- The release APK is unsigned. Sign it before installing or distributing.'
-          } else {
-            $lines += '- The debug APK uses the runner-generated debug key; keys can differ between runs.'
-          }
+          $lines += '- Both variants use the fixed repository development certificate.'
+          $lines += '- This public development key is for personal builds, not production distribution.'
           $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-

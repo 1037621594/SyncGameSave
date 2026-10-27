@@ -49,14 +49,14 @@ public class QiniuConfigActivity extends AppCompatActivity {
         }
         QiniuConfig config = model.draft;
         LinearLayout body = Ui.screen(this, "七牛配置");
-        Ui.text(body, "配置本机直连七牛使用的凭证。所有地址使用 HTTPS；服务地址须与空间实际区域匹配。", 14);
+        Ui.text(body, "配置本机直连七牛使用的凭证。所有地址支持 HTTP 和 HTTPS；服务地址须与空间实际区域匹配。", 14);
         bucket = Ui.field(body, "空间名称（Bucket）", config.getBucket(), false);
         access = Ui.field(body, "AccessKey", config.getAccessKey(), true);
         secret = Ui.field(body, "SecretKey", config.getSecretKey(), true);
         upload = Ui.field(body, "上传服务地址", config.getUploadEndpoint(), false);
         resource = Ui.field(body, "资源管理地址（stat）", config.getResourceEndpoint(), false);
         list = Ui.field(body, "资源列举地址（list）", config.getListEndpoint(), false);
-        domain = Ui.field(body, "下载域名，例如 https://save.example.com", config.getDownloadDomain(), false);
+        domain = Ui.field(body, "下载域名，例如 http://save.example.com", config.getDownloadDomain(), false);
         privateBucket = new CheckBox(this);
         privateBucket.setText("私有空间（下载时生成限时访问签名）");
         privateBucket.setChecked(config.isPrivateBucket());

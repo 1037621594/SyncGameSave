@@ -69,9 +69,9 @@ public class QiniuClient implements java.io.Closeable {
 
     public static HttpUrl endpoint(String input) {
         HttpUrl url = HttpUrl.parse(input == null ? "" : input.trim());
-        if (url == null || !url.isHttps() || !url.username().isEmpty() || !url.password().isEmpty()
+        if (url == null || !url.username().isEmpty() || !url.password().isEmpty()
                 || url.query() != null || url.fragment() != null || !url.encodedPath().equals("/"))
-            throw new IllegalArgumentException("服务地址／下载域名必须是 HTTPS 域名，可带端口，不可包含路径、查询参数或账号");
+            throw new IllegalArgumentException("服务地址／下载域名必须是 HTTP 或 HTTPS 域名，可带端口，不可包含路径、查询参数或账号");
         return url;
     }
 
@@ -91,7 +91,9 @@ public class QiniuClient implements java.io.Closeable {
         String date = format.format(new Date());
         String method = post ? "POST" : "GET";
         String path = url.encodedPath() + (url.encodedQuery() == null ? "" : "?" + url.encodedQuery());
-        String host = url.host() + (url.port() == 443 ? "" : ":" + url.port());
+        int defaultPort = url.isHttps() ? 443 : 80;
+        String host = (url.host().contains(":") ? "[" + url.host() + "]" : url.host())
+                + (url.port() == defaultPort ? "" : ":" + url.port());
         String canonical = method + " " + path + "\nHost: " + host
                 + (post ? "\nContent-Type: application/x-www-form-urlencoded" : "")
                 + "\nX-Qiniu-Date: " + date + "\n\n";
@@ -118,7 +120,7 @@ public class QiniuClient implements java.io.Closeable {
             token.detach(call);
             token.check();
             if (e.getMessage() != null && e.getMessage().startsWith("七牛请求失败")) throw e;
-            throw new IOException("七牛网络请求失败，请检查网络、HTTPS 证书及服务地址");
+            throw new IOException("七牛网络请求失败，请检查网络、服务地址及证书（HTTPS）");
         }
         // Keep the call attached until the body has been consumed so cancellation interrupts reads.
     }
@@ -244,5 +246,3 @@ public class QiniuClient implements java.io.Closeable {
         return file;
     }
 }
-
-

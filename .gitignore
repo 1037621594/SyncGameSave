@@ -46,3 +46,6 @@ id_rsa
 id_rsa.pub
 .env
 .env.*
+
+# Public development signing identity; all other keystores remain ignored.
+!/signing/development.keystore
