@@ -100,8 +100,10 @@ public class QiniuConfigActivity extends AppCompatActivity {
     }
 
     @Override protected void onPause() {
-        if (bucket != null) model.draft = collect();
+        // A lifecycle callback can arrive before the complete form is available.
+        if (model != null && bucket != null && access != null && secret != null
+                && upload != null && resource != null && list != null && domain != null && privateBucket != null)
+            model.draft = collect();
         super.onPause();
     }
 }
-

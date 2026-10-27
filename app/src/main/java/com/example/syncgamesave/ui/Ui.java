@@ -63,7 +63,10 @@ public final class Ui {
         input.setSaveEnabled(false);
         if (android.os.Build.VERSION.SDK_INT >= 26)
             input.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
-        wrapper.addView(input, new ViewGroup.LayoutParams(-1, -2));
+        // TextInputLayout passes these params to its internal frame, which is a
+        // child of LinearLayout. Generic ViewGroup.LayoutParams causes a cast failure.
+        wrapper.addView(input, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         if (password) wrapper.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.bottomMargin = dp(parent.getContext(), 12);
@@ -87,5 +90,3 @@ public final class Ui {
         return timestamp <= 0 ? "未知／尚未同步" : new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date(timestamp));
     }
 }
-
-
