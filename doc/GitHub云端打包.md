@@ -20,6 +20,7 @@
 
 - Ubuntu 24.04 GitHub 托管 Runner。
 - JDK 17、Gradle 8.2、Android SDK Platform 34、Build Tools 34.0.0。
+- Android SDK 初始化显式指定 `packages: platform-tools`，覆盖 setup-android v3 默认的旧 `tools` 包；Platform 34 和 Build Tools 34.0.0 由后续步骤安装，避免 `Failed to find package 'tools'`。
 - 所有自行编写的工作流 `run` 步骤使用 PowerShell 7（`pwsh`）。
 - 只执行 APK assemble，显式排除 `test` 和 `lint`；不运行应用、模拟器或设备测试。
 - Gradle 由 `gradle/actions/setup-gradle` 安装，直接调用 `gradle`，不依赖初始工程缺失的 `gradle-wrapper.jar`，也不需要 Linux `gradlew`。
@@ -27,3 +28,4 @@
 - 七牛凭证仍在安装后的应用内填写，未写入流水线或构建产物。
 
 此次配置不会在本机执行项目构建。工作流推送到 GitHub 后由 GitHub Runner 执行打包；产物是否构建成功以 Actions 的实际结果为准。
+

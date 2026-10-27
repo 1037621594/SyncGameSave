@@ -49,6 +49,9 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Override the action's legacy "tools platform-tools" default.
+          packages: 'platform-tools'
 
       - name: Install Android 34 packages
         run: |
@@ -96,3 +99,4 @@ jobs:
             $lines += '- The debug APK uses the runner-generated debug key; keys can differ between runs.'
           }
           $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
