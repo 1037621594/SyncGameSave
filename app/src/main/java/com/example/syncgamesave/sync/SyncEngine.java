@@ -113,6 +113,11 @@ public class SyncEngine {
             try {
                 PathRules.validateRelative(path);
                 if (!PathRules.matches(mapping, path)) continue;
+                if (unchangedRemote(mapping, path, listed)) {
+                    result.setUnchanged(result.getUnchanged() + 1);
+                    progress.update("远端版本未变化，已跳过：" + path, index + 1, objects.size());
+                    continue;
+                }
                 progress.update("正在下载：" + path, index, objects.size());
                 downloadOne(mapping, path, listed.getKey(), result);
             } catch (Exception e) {
@@ -192,6 +197,16 @@ public class SyncEngine {
     private boolean unchangedMetadata(LocalFile local, FileState state) {
         return state != null && !state.isFailed() && local.getModified() > 0 && local.getSize() >= 0
                 && local.getModified() == state.getLocalModified() && local.getSize() == state.getLocalSize();
+    }
+
+    private boolean unchangedRemote(PathMapping mapping, String path, RemoteFile listed) {
+        FileState state = repository.file(mapping.getId(), path);
+        if (state == null || state.isFailed() || state.getRemoteHash() == null
+                || !Objects.equals(state.getRemoteHash(), listed.getHash())
+                || state.getLocalSize() != listed.getSize()) return false;
+        LocalFile local = files.find(mapping, path);
+        return local != null && local.getModified() > 0 && local.getSize() == listed.getSize()
+                && local.getModified() == state.getLocalModified();
     }
 
     private void saveState(PathMapping mapping, LocalFile local, RemoteFile version, String contentHash, String direction) {

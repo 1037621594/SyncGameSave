@@ -14,12 +14,15 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.text.SimpleDateFormat;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Locale;
+import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import okhttp3.Call;
 import okhttp3.HttpUrl;
@@ -194,6 +197,7 @@ public class S3Client implements ObjectStorage {
                             if ("Key".equals(name)) current.setKey(parser.nextText());
                             else if ("ETag".equals(name)) current.setHash(parser.nextText());
                             else if ("Size".equals(name)) current.setSize(Long.parseLong(parser.nextText()));
+                            else if ("LastModified".equals(name)) current.setUploadedAt(parseTimestamp(parser.nextText()));
                         } else if (parser.getDepth() == 2) {
                             if ("IsTruncated".equals(name)) {
                                 String value = parser.nextText();
@@ -228,6 +232,17 @@ public class S3Client implements ObjectStorage {
     private static String decode(String value) throws Exception {
         // URLDecoder uses form encoding; a literal '+' in an S3 key must remain a plus.
         return URLDecoder.decode(value.replace("+", "%2B"), "UTF-8");
+    }
+
+    private static long parseTimestamp(String value) {
+        for (String pattern : new String[]{"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", "yyyy-MM-dd'T'HH:mm:ss'Z'"}) {
+            try {
+                SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.ROOT);
+                format.setTimeZone(TimeZone.getTimeZone("UTC"));
+                return format.parse(value).getTime();
+            } catch (Exception ignored) { }
+        }
+        return 0;
     }
 
     public RemoteFile stat(String key) throws Exception {
