@@ -199,7 +199,7 @@ public class SyncEngine {
                 && local.getModified() == state.getLocalModified() && local.getSize() == state.getLocalSize();
     }
 
-    private boolean unchangedRemote(PathMapping mapping, String path, RemoteFile listed) {
+    private boolean unchangedRemote(PathMapping mapping, String path, RemoteFile listed) throws IOException {
         FileState state = repository.file(mapping.getId(), path);
         if (state == null || state.isFailed() || state.getRemoteHash() == null
                 || !Objects.equals(state.getRemoteHash(), listed.getHash())
