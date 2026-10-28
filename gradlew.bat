@@ -24,6 +24,20 @@
 @rem Set local scope for the variables with windows NT shell
 if "%OS%"=="Windows_NT" setlocal
 
+@rem Android Gradle Plugin 8.x requires Gradle to run on Java 11 or newer.
+if defined JAVA_HOME goto findJavaFromJavaHome
+set JAVA_EXE=java.exe
+%JAVA_EXE% -version 2>&1 | findstr /R /C:"version \"1\." >nul
+if not errorlevel 1 if exist "D:\ruanjian\jdk21\bin\java.exe" set "JAVA_HOME=D:\ruanjian\jdk21"
+goto init
+
+:findJavaFromJavaHome
+"%JAVA_HOME%\bin\java.exe" -version 2>&1 | findstr /R /C:"version \"1\." >nul
+if errorlevel 1 goto init
+if exist "D:\ruanjian\jdk21\bin\java.exe" set "JAVA_HOME=D:\ruanjian\jdk21"
+
+:init
+
 set DIRNAME=%~dp0
 if "%DIRNAME%"=="" set DIRNAME=.
 @rem This is normally unused
