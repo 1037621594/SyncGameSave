@@ -11,6 +11,8 @@ public class FileState {
     private long localSize;
     private long sourceModified;
     private String remoteHash;
+    private long remoteSize;
+    private boolean remoteSizeKnown;
     private String contentHash;
     private String direction;
     private boolean failed;

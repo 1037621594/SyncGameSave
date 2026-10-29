@@ -5,17 +5,29 @@ import com.example.syncgamesave.model.FileDigest;
 import com.example.syncgamesave.model.FileState;
 import com.example.syncgamesave.model.LocalFile;
 import com.example.syncgamesave.model.PathMapping;
+import com.example.syncgamesave.model.RemoteManifest;
+import com.example.syncgamesave.model.RemoteManifestEntry;
 import com.example.syncgamesave.model.RemoteFile;
 import com.example.syncgamesave.model.SyncResult;
 import com.example.syncgamesave.storage.ObjectStorage;
 import com.example.syncgamesave.storage.TreeFiles;
 import com.example.syncgamesave.storage.PathRules;
+import com.example.syncgamesave.storage.Digests;
+import com.google.gson.Gson;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class SyncEngine {
+    private static final String MANIFEST_PATH = "._syncgamesave/manifest.json";
+    private final Gson gson = new Gson();
     public interface Progress { void update(String message, int done, int total); }
     public interface Confirmer {
         boolean confirm(String path, long localTime, long remoteTime, String reason, CancellationToken token) throws Exception;
@@ -41,6 +53,7 @@ public class SyncEngine {
     public SyncResult upload(PathMapping mapping) throws Exception {
         SyncResult result = new SyncResult();
         result.setDirection("upload");
+        RemoteManifest manifest = loadManifest(mapping, true);
         long cutoff = System.currentTimeMillis();
         progress.update("正在扫描本地目录", 0, 0);
         List<LocalFile> locals = files.scan(mapping, token);
@@ -51,6 +64,7 @@ public class SyncEngine {
             progress.update("正在上传：" + path, index, locals.size());
             FileDigest snapshot = null;
             try {
+                if (MANIFEST_PATH.equals(path)) throw new IOException("本地路径与远端同步清单保留路径冲突");
                 token.check();
                 LocalFile local = files.find(mapping, path);
                 if (local == null) throw new IOException("扫描后文件已被删除");
@@ -82,6 +96,8 @@ public class SyncEngine {
                     if (!snapshot.getSha256().equals(check.getSha256()) || !TreeFiles.same(after, files.find(mapping, path)))
                         throw new IOException("上传期间内容发生变化，已保留为待重试");
                 } finally { check.getFile().delete(); }
+                manifest.getFiles().put(path, entry(uploaded));
+                saveManifest(mapping, manifest);
                 saveState(mapping, local, uploaded, snapshot.getSha256(), "upload");
                 result.setSuccess(result.getSuccess() + 1);
             } catch (Exception e) {
@@ -104,12 +120,12 @@ public class SyncEngine {
         result.setDirection("download");
         progress.update("正在读取远端文件列表", 0, 0);
         files.root(mapping);
-        List<RemoteFile> objects = remote.list(mapping.getRemotePrefix());
+        RemoteManifest manifest = loadManifest(mapping, true);
+        List<RemoteFile> objects = manifestObjects(mapping, manifest);
         int index = 0;
         for (RemoteFile listed : objects) {
             if (token.isCancelled()) break;
             String path = listed.getKey().substring(mapping.getRemotePrefix().length());
-            if (path.isEmpty() || path.endsWith("/")) continue;
             try {
                 PathRules.validateRelative(path);
                 if (!PathRules.matches(mapping, path)) continue;
@@ -119,7 +135,7 @@ public class SyncEngine {
                     continue;
                 }
                 progress.update("正在下载：" + path, index, objects.size());
-                downloadOne(mapping, path, listed.getKey(), result);
+                downloadOne(mapping, path, listed.getKey(), listed, result);
             } catch (Exception e) {
                 if (token.isCancelled()) break;
                 fail(mapping, path, result, e);
@@ -134,8 +150,13 @@ public class SyncEngine {
         return result;
     }
 
-    private void downloadOne(PathMapping mapping, String path, String key, SyncResult result) throws Exception {
-        RemoteFile version = remote.stat(key);
+    private void downloadOne(PathMapping mapping, String path, String key, RemoteFile listed, SyncResult result) throws Exception {
+        RemoteFile version = listed;
+        if (version.getSourceModified() <= 0 || version.getContentHash() == null) {
+            version = remote.stat(key);
+            if (!Objects.equals(listed.getHash(), version.getHash()) || listed.getSize() != version.getSize())
+                throw new IOException("下载前远端版本已变化，请重新下载");
+        }
         File temporary = files.newDownload();
         try {
             // Fetch and validate the remote version before any local destructive operation.
@@ -202,11 +223,11 @@ public class SyncEngine {
     private boolean unchangedRemote(PathMapping mapping, String path, RemoteFile listed) throws IOException {
         FileState state = repository.file(mapping.getId(), path);
         if (state == null || state.isFailed() || state.getRemoteHash() == null
-                || !Objects.equals(state.getRemoteHash(), listed.getHash())
-                || state.getLocalSize() != listed.getSize()) return false;
-        LocalFile local = files.find(mapping, path);
-        return local != null && local.getModified() > 0 && local.getSize() == listed.getSize()
-                && local.getModified() == state.getLocalModified();
+                || !Objects.equals(state.getRemoteHash(), listed.getHash())) return false;
+        long knownRemoteSize = state.isRemoteSizeKnown() ? state.getRemoteSize() : state.getLocalSize();
+        if (knownRemoteSize != listed.getSize()) return false;
+        // A local edit does not make an unchanged remote object a download candidate.
+        return files.find(mapping, path) != null;
     }
 
     private void saveState(PathMapping mapping, LocalFile local, RemoteFile version, String contentHash, String direction) {
@@ -216,9 +237,90 @@ public class SyncEngine {
         state.setLocalSize(local.getSize());
         state.setSourceModified(version.getSourceModified());
         state.setRemoteHash(version.getHash());
+        state.setRemoteSize(version.getSize());
+        state.setRemoteSizeKnown(true);
         state.setContentHash(contentHash);
         state.setDirection(direction);
         repository.saveFile(mapping.getId(), state);
+    }
+
+    private String manifestKey(PathMapping mapping) { return mapping.getRemotePrefix() + MANIFEST_PATH; }
+
+    private RemoteManifest loadManifest(PathMapping mapping, boolean bootstrap) throws Exception {
+        String key = manifestKey(mapping);
+        RemoteFile remoteManifest = null;
+        for (RemoteFile object : remote.list(key)) if (key.equals(object.getKey())) { remoteManifest = object; break; }
+        if (remoteManifest != null) {
+            File temporary = files.newDownload();
+            try {
+                remote.download(remoteManifest, temporary);
+                RemoteManifest manifest;
+                try (InputStreamReader input = new InputStreamReader(new FileInputStream(temporary), StandardCharsets.UTF_8)) {
+                    manifest = gson.fromJson(input, RemoteManifest.class);
+                }
+                if (manifest == null || manifest.getVersion() != 1 || manifest.getFiles() == null)
+                    throw new IOException("远端同步清单格式不受支持");
+                for (String path : manifest.getFiles().keySet()) {
+                    PathRules.validateRelative(path);
+                    if (MANIFEST_PATH.equals(path)) throw new IOException("远端同步清单包含保留路径");
+                }
+                return manifest;
+            } finally { temporary.delete(); }
+        }
+        RemoteManifest manifest = new RemoteManifest();
+        if (bootstrap) {
+            for (RemoteFile object : remote.list(mapping.getRemotePrefix())) {
+                String path = object.getKey().substring(mapping.getRemotePrefix().length());
+                if (path.isEmpty() || path.endsWith("/") || MANIFEST_PATH.equals(path)) continue;
+                try { PathRules.validateRelative(path); }
+                catch (IllegalArgumentException ignored) { continue; }
+                manifest.getFiles().put(path, entry(object));
+            }
+            if (!manifest.getFiles().isEmpty()) saveManifest(mapping, manifest);
+        }
+        return manifest;
+    }
+
+    private List<RemoteFile> manifestObjects(PathMapping mapping, RemoteManifest manifest) throws IOException {
+        List<RemoteFile> objects = new ArrayList<>();
+        for (Map.Entry<String, RemoteManifestEntry> item : manifest.getFiles().entrySet()) {
+            String path = item.getKey();
+            PathRules.validateRelative(path);
+            if (!PathRules.matches(mapping, path)) continue;
+            RemoteManifestEntry entry = item.getValue();
+            if (entry == null || entry.getEtag() == null || entry.getEtag().isEmpty() || entry.getSize() < 0)
+                throw new IOException("远端同步清单中的对象信息不完整：" + path);
+            RemoteFile object = new RemoteFile();
+            object.setKey(mapping.getRemotePrefix() + path);
+            object.setHash(entry.getEtag());
+            object.setSize(entry.getSize());
+            object.setSourceModified(entry.getSourceModified());
+            object.setContentHash(entry.getSha256());
+            objects.add(object);
+        }
+        return objects;
+    }
+
+    private RemoteManifestEntry entry(RemoteFile object) {
+        RemoteManifestEntry entry = new RemoteManifestEntry();
+        entry.setEtag(object.getHash());
+        entry.setSize(object.getSize());
+        entry.setSourceModified(object.getSourceModified());
+        entry.setSha256(object.getContentHash());
+        return entry;
+    }
+
+    private void saveManifest(PathMapping mapping, RemoteManifest manifest) throws Exception {
+        File temporary = files.newDownload();
+        try {
+            byte[] json = gson.toJson(manifest).getBytes(StandardCharsets.UTF_8);
+            try (FileOutputStream output = new FileOutputStream(temporary)) {
+                output.write(json);
+                output.getFD().sync();
+            }
+            FileDigest digest = Digests.inspect(temporary, token);
+            remote.upload(manifestKey(mapping), System.currentTimeMillis(), digest);
+        } finally { temporary.delete(); }
     }
 
     private void fail(PathMapping mapping, String path, SyncResult result, Exception error) {
