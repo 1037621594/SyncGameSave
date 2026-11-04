@@ -9,7 +9,9 @@ import com.example.syncgamesave.model.FileState;
 import com.example.syncgamesave.model.PathMapping;
 import com.google.gson.Gson;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class SyncRepository extends SQLiteOpenHelper {
     private final Gson gson = new Gson();
@@ -63,6 +65,18 @@ public class SyncRepository extends SQLiteOpenHelper {
                 "mapping_id=? AND path=?", new String[]{mappingId, path}, null, null, null)) {
             return cursor.moveToFirst() ? gson.fromJson(cursor.getString(0), FileState.class) : null;
         }
+    }
+
+    /** One snapshot for a download task; comparison workers never access SQLite. */
+    public synchronized Map<String, FileState> files(String mappingId) {
+        Map<String, FileState> result = new HashMap<>();
+        try (Cursor cursor = getReadableDatabase().query("files", new String[]{"path", "payload"},
+                "mapping_id=?", new String[]{mappingId}, null, null, null)) {
+            while (cursor.moveToNext()) {
+                result.put(cursor.getString(0), gson.fromJson(cursor.getString(1), FileState.class));
+            }
+        }
+        return result;
     }
 
     public synchronized void saveFile(String mappingId, FileState state) {

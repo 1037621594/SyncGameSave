@@ -24,9 +24,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class SyncEngine {
     private static final String MANIFEST_PATH = "._syncgamesave/manifest.json";
+    private static final int COMPARISON_THREADS = 4;
     private final Gson gson = new Gson();
     public interface Progress { void update(String message, int done, int total); }
     public interface Confirmer {
@@ -122,26 +129,23 @@ public class SyncEngine {
         files.root(mapping);
         RemoteManifest manifest = loadManifest(mapping, true);
         List<RemoteFile> objects = manifestObjects(mapping, manifest);
+        Map<String, FileState> states = repository.files(mapping.getId());
+        List<RemoteFile> candidates = compareRemoteFiles(mapping, objects, states, result);
         int index = 0;
-        for (RemoteFile listed : objects) {
+        for (RemoteFile listed : candidates) {
             if (token.isCancelled()) break;
             String path = listed.getKey().substring(mapping.getRemotePrefix().length());
             try {
                 PathRules.validateRelative(path);
                 if (!PathRules.matches(mapping, path)) continue;
-                if (unchangedRemote(mapping, path, listed)) {
-                    result.setUnchanged(result.getUnchanged() + 1);
-                    progress.update("远端版本未变化，已跳过：" + path, index + 1, objects.size());
-                    continue;
-                }
-                progress.update("正在下载：" + path, index, objects.size());
-                downloadOne(mapping, path, listed.getKey(), listed, result);
+                progress.update("正在下载：" + path, index, candidates.size());
+                downloadOne(mapping, path, listed.getKey(), listed, states.get(path), result);
             } catch (Exception e) {
                 if (token.isCancelled()) break;
                 fail(mapping, path, result, e);
             } finally {
                 index++;
-                progress.update("已处理 " + index + "/" + objects.size(), index, objects.size());
+                progress.update("下载已处理 " + index + "/" + candidates.size(), index, candidates.size());
             }
         }
         result.setCancelled(token.isCancelled());
@@ -150,7 +154,59 @@ public class SyncEngine {
         return result;
     }
 
-    private void downloadOne(PathMapping mapping, String path, String key, RemoteFile listed, SyncResult result) throws Exception {
+    /** Bounded batches keep directory queries parallel without queuing the entire manifest. */
+    private List<RemoteFile> compareRemoteFiles(PathMapping mapping, List<RemoteFile> objects,
+                                                Map<String, FileState> states, SyncResult result) throws Exception {
+        List<RemoteFile> candidates = new ArrayList<>();
+        if (objects.isEmpty() || token.isCancelled()) return candidates;
+        ExecutorService comparisons = Executors.newFixedThreadPool(Math.min(COMPARISON_THREADS, objects.size()));
+        progress.update("正在并行对比远端清单", 0, objects.size());
+        try {
+            for (int start = 0; start < objects.size() && !token.isCancelled(); start += COMPARISON_THREADS) {
+                int end = Math.min(start + COMPARISON_THREADS, objects.size());
+                List<Future<Boolean>> pending = new ArrayList<>();
+                for (int i = start; i < end; i++) {
+                    RemoteFile listed = objects.get(i);
+                    String path = listed.getKey().substring(mapping.getRemotePrefix().length());
+                    pending.add(comparisons.submit(() -> {
+                        token.check();
+                        boolean unchanged = unchangedRemote(mapping, path, listed, states.get(path));
+                        token.check();
+                        return unchanged;
+                    }));
+                }
+                for (int i = start; i < end; i++) {
+                    if (token.isCancelled()) return candidates;
+                    RemoteFile listed = objects.get(i);
+                    String path = listed.getKey().substring(mapping.getRemotePrefix().length());
+                    try {
+                        Future<Boolean> comparison = pending.get(i - start);
+                        boolean unchanged;
+                        while (true) {
+                            if (token.isCancelled()) return candidates;
+                            try { unchanged = comparison.get(200, TimeUnit.MILLISECONDS); break; }
+                            catch (TimeoutException ignored) { /* Keep cancellation responsive. */ }
+                        }
+                        // Result accounting and all writes stay on the coordinator thread.
+                        if (unchanged) result.setUnchanged(result.getUnchanged() + 1);
+                        else candidates.add(listed);
+                    } catch (ExecutionException e) {
+                        if (token.isCancelled()) return candidates;
+                        Throwable cause = e.getCause();
+                        if (!(cause instanceof Exception)) throw e;
+                        fail(mapping, path, result, (Exception) cause);
+                    }
+                }
+                progress.update("清单对比 " + end + "/" + objects.size() + "，待下载 " + candidates.size(), end, objects.size());
+            }
+        } finally {
+            comparisons.shutdownNow();
+        }
+        return candidates;
+    }
+
+    private void downloadOne(PathMapping mapping, String path, String key, RemoteFile listed,
+                             FileState previous, SyncResult result) throws Exception {
         RemoteFile version = listed;
         if (version.getSourceModified() <= 0 || version.getContentHash() == null) {
             version = remote.stat(key);
@@ -164,7 +220,6 @@ public class SyncEngine {
             for (int attempt = 0; attempt < 3; attempt++) {
                 token.check();
                 LocalFile local = files.find(mapping, path);
-                FileState previous = repository.file(mapping.getId(), path);
                 String reviewedHash = null;
                 if (local != null) {
                     FileDigest localDigest = files.snapshot(local, token);
@@ -220,8 +275,7 @@ public class SyncEngine {
                 && local.getModified() == state.getLocalModified() && local.getSize() == state.getLocalSize();
     }
 
-    private boolean unchangedRemote(PathMapping mapping, String path, RemoteFile listed) throws IOException {
-        FileState state = repository.file(mapping.getId(), path);
+    private boolean unchangedRemote(PathMapping mapping, String path, RemoteFile listed, FileState state) throws IOException {
         if (state == null || state.isFailed() || state.getRemoteHash() == null
                 || !Objects.equals(state.getRemoteHash(), listed.getHash())) return false;
         long knownRemoteSize = state.isRemoteSizeKnown() ? state.getRemoteSize() : state.getLocalSize();
