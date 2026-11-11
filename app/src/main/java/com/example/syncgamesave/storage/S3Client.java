@@ -8,6 +8,7 @@ import com.amazonaws.http.HttpMethodName;
 import com.example.syncgamesave.model.FileDigest;
 import com.example.syncgamesave.model.RemoteFile;
 import com.example.syncgamesave.model.S3Config;
+import com.example.syncgamesave.model.S3DirectoryPage;
 import com.example.syncgamesave.sync.CancellationToken;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -232,6 +233,86 @@ public class S3Client implements ObjectStorage {
     private static String decode(String value) throws Exception {
         // URLDecoder uses form encoding; a literal '+' in an S3 key must remain a plus.
         return URLDecoder.decode(value.replace("+", "%2B"), "UTF-8");
+    }
+
+    /** Lists one directory page without scanning all descendants. */
+    public S3DirectoryPage listDirectory(String prefix, String marker) throws Exception {
+        HttpUrl.Builder builder = url(null).newBuilder()
+                .addEncodedQueryParameter("prefix", encode(prefix, false))
+                .addQueryParameter("delimiter", "/").addQueryParameter("max-keys", "200")
+                .addQueryParameter("encoding-type", "url");
+        if (!marker.isEmpty()) builder.addEncodedQueryParameter("marker", encode(marker, false));
+        S3DirectoryPage page = new S3DirectoryPage();
+        String encoding = "";
+        boolean root = false;
+        boolean truncated = false;
+        boolean truncationSeen = false;
+        try (Response response = execute(signed(new Request.Builder().url(builder.build()).get().build(), EMPTY_SHA256))) {
+            if (response.body() == null) throw new IOException("S3 列举响应为空");
+            XmlPullParser parser = Xml.newPullParser();
+            parser.setInput(response.body().byteStream(), "UTF-8");
+            RemoteFile current = null;
+            boolean commonPrefix = false;
+            int event;
+            while ((event = parser.nextToken()) != XmlPullParser.END_DOCUMENT) {
+                token.check();
+                if (event == XmlPullParser.DOCDECL) throw new IOException("S3 XML 不允许文档类型声明");
+                if (event == XmlPullParser.START_TAG) {
+                    String name = parser.getName();
+                    int depth = parser.getDepth();
+                    if (depth == 1) {
+                        root = "ListBucketResult".equals(name);
+                        if (!root) throw new IOException("S3 返回的列举格式不正确");
+                    } else if (depth == 2 && "Contents".equals(name)) current = new RemoteFile();
+                    else if (depth == 2 && "CommonPrefixes".equals(name)) commonPrefix = true;
+                    else if (depth == 3 && commonPrefix && "Prefix".equals(name)) page.getDirectories().add(parser.nextText());
+                    else if (depth == 3 && current != null) {
+                        if ("Key".equals(name)) current.setKey(parser.nextText());
+                        else if ("ETag".equals(name)) current.setHash(parser.nextText());
+                        else if ("Size".equals(name)) current.setSize(Long.parseLong(parser.nextText()));
+                        else if ("LastModified".equals(name)) current.setUploadedAt(parseTimestamp(parser.nextText()));
+                    } else if (depth == 2) {
+                        if ("IsTruncated".equals(name)) {
+                            String value = parser.nextText();
+                            if (!"true".equals(value) && !"false".equals(value)) throw new IOException("S3 分页状态格式错误");
+                            truncated = "true".equals(value);
+                            truncationSeen = true;
+                        } else if ("NextMarker".equals(name)) page.setNextMarker(parser.nextText());
+                        else if ("EncodingType".equals(name)) encoding = parser.nextText();
+                    }
+                } else if (event == XmlPullParser.END_TAG && parser.getDepth() == 2) {
+                    if ("Contents".equals(parser.getName())) {
+                        if (current == null || current.getKey() == null) throw new IOException("S3 对象信息缺少 Key");
+                        page.getFiles().add(current);
+                        current = null;
+                    } else if ("CommonPrefixes".equals(parser.getName())) commonPrefix = false;
+                }
+            }
+        }
+        if (!root || !truncationSeen || (!encoding.isEmpty() && !"url".equals(encoding)))
+            throw new IOException("S3 列举响应缺少分页信息或编码不支持");
+        for (RemoteFile file : page.getFiles()) {
+            if ("url".equals(encoding)) file.setKey(decode(file.getKey()));
+            if (!file.getKey().startsWith(prefix) || file.getKey().substring(prefix.length()).contains("/"))
+                throw new IOException("S3 返回了当前目录范围外的文件");
+        }
+        for (int i = 0; i < page.getDirectories().size(); i++) {
+            String directory = page.getDirectories().get(i);
+            if ("url".equals(encoding)) directory = decode(directory);
+            if (!directory.startsWith(prefix) || !directory.endsWith("/") || directory.length() <= prefix.length()
+                    || directory.substring(prefix.length(), directory.length() - 1).contains("/"))
+                throw new IOException("S3 返回了当前目录范围外的子目录");
+            page.getDirectories().set(i, directory);
+        }
+        String next = "url".equals(encoding) ? decode(page.getNextMarker()) : page.getNextMarker();
+        if (truncated && next.isEmpty()) {
+            // Some compatible services omit NextMarker even with a delimiter.
+            for (RemoteFile file : page.getFiles()) if (file.getKey().compareTo(next) > 0) next = file.getKey();
+            for (String directory : page.getDirectories()) if (directory.compareTo(next) > 0) next = directory;
+        }
+        if (truncated && (next.isEmpty() || next.equals(marker))) throw new IOException("S3 分页标记为空或重复，请重试");
+        page.setNextMarker(truncated ? next : "");
+        return page;
     }
 
     private static long parseTimestamp(String value) {

@@ -21,6 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Process-scoped coordinator: keeps tasks and confirmation decisions across Activity recreation. */
 public class SyncController {
+    public interface StorageTask<T> { T run(S3Client client, CancellationToken token) throws Exception; }
+    public interface StorageCallback<T> { void complete(T result, Exception error); }
     private final SyncRepository repository;
     private final SecureConfigStore configStore;
     private final TreeFiles files;
@@ -57,6 +59,27 @@ public class SyncController {
     public void removeHistory(String id) { statuses.remove(id); changed(); }
 
     private void changed() { changes.setValue(++revision); }
+
+    /** Uses the same lock and worker as synchronization, including across Activity recreation. */
+    public <T> boolean runStorageTask(CancellationToken token, StorageTask<T> task, StorageCallback<T> callback) {
+        if (!busy.compareAndSet(false, true)) return false;
+        changed();
+        worker.execute(() -> {
+            T result = null;
+            Exception error = null;
+            try (S3Client client = new S3Client(configStore.read(), token)) {
+                result = task.run(client, token);
+            } catch (Exception e) { error = e; }
+            T completed = result;
+            Exception failure = error;
+            main.post(() -> {
+                busy.set(false);
+                callback.complete(completed, failure);
+                changed();
+            });
+        });
+        return true;
+    }
 
     public boolean start(PathMapping mapping, boolean download) {
         if (!busy.compareAndSet(false, true)) return false;
