@@ -2,4 +2,5 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@+id/menu_add_path" android:title="添加路径" />
     <item android:id="@+id/menu_s3_config" android:title="S3 配置" />
+    <item android:id="@+id/menu_s3_browser" android:title="浏览 S3 文件" />
 </menu>

@@ -22,6 +22,7 @@ import com.example.syncgamesave.model.SyncResult;
 import com.example.syncgamesave.model.TaskStatus;
 import com.example.syncgamesave.sync.SyncController;
 import com.example.syncgamesave.ui.MappingEditorActivity;
+import com.example.syncgamesave.ui.S3BrowserActivity;
 import com.example.syncgamesave.ui.S3ConfigActivity;
 import com.example.syncgamesave.ui.Ui;
 import com.google.android.material.appbar.MaterialToolbar;
@@ -70,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
             drawer.closeDrawer(GravityCompat.START);
             if (item.getItemId() == R.id.menu_add_path) editMapping(null);
             else if (item.getItemId() == R.id.menu_s3_config) editConfig();
+            else if (item.getItemId() == R.id.menu_s3_browser) browseS3();
             return false;
         });
         controller.changes().observe(this, revision -> { render(); uploadPending(); });
@@ -194,6 +196,11 @@ public class MainActivity extends AppCompatActivity {
     private void editConfig() {
         if (controller.isBusy()) { toast("请等待当前任务完成"); return; }
         configEditor.launch(new Intent(this, S3ConfigActivity.class));
+    }
+
+    private void browseS3() {
+        if (controller.isBusy()) { toast("请等待当前任务完成"); return; }
+        startActivity(new Intent(this, S3BrowserActivity.class));
     }
 
     private void delete(PathMapping mapping) {

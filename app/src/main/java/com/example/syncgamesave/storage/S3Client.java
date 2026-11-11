@@ -299,6 +299,12 @@ public class S3Client implements ObjectStorage {
         return file;
     }
 
+    public void delete(String key) throws Exception {
+        PathRules.validateRelative(key);
+        Request request = new Request.Builder().url(url(key)).delete().build();
+        try (Response ignored = execute(signed(request, EMPTY_SHA256))) { }
+    }
+
     @Override public void close() {
         http.dispatcher().cancelAll();
         http.connectionPool().evictAll();

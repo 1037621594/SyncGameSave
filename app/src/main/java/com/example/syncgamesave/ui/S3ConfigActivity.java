@@ -1,5 +1,7 @@
 package com.example.syncgamesave.ui;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.os.Bundle;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
@@ -12,6 +14,7 @@ import com.example.syncgamesave.model.S3Config;
 import com.example.syncgamesave.storage.S3Client;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.gson.Gson;
 import java.util.Objects;
 
 public class S3ConfigActivity extends AppCompatActivity {
@@ -29,7 +32,9 @@ public class S3ConfigActivity extends AppCompatActivity {
     private TextInputEditText secret;
     private TextInputEditText endpoint;
     private TextInputEditText region;
+    private TextInputEditText importContent;
     private CheckBox pathStyle;
+    private final Gson gson = new Gson();
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -58,7 +63,63 @@ public class S3ConfigActivity extends AppCompatActivity {
         pathStyle.setChecked(config.isPathStyle());
         body.addView(pathStyle);
         Ui.text(body, "取消勾选时使用 Bucket.Endpoint 域名访问。首次切换 S3，或更换地址、区域、Bucket、访问方式时，将清除同步记录，下一次上传按首次同步处理。原本地目录与格式配置保留。", 14);
+        Ui.text(body, "导入导出内容包含 Access Key 和 Secret Key，请只通过可信渠道传递，并在使用后清理剪切板。", 14);
+        Ui.button(body, "导出配置到剪切板", this::exportConfig);
+        importContent = Ui.field(body, "粘贴 S3 配置 JSON", "", false);
+        Ui.button(body, "导入配置", this::importConfig);
         Ui.button(body, "保存 S3 配置", this::save);
+    }
+
+    private void exportConfig() {
+        S3Config config = collect();
+        model.draft = config;
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard == null) {
+            Toast.makeText(this, "设备不支持剪切板", Toast.LENGTH_LONG).show();
+            return;
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText("S3 配置", gson.toJson(config)));
+        Toast.makeText(this, "S3 配置已复制到剪切板", Toast.LENGTH_LONG).show();
+    }
+
+    private void importConfig() {
+        String payload = Ui.value(importContent);
+        if (payload.isEmpty()) {
+            Toast.makeText(this, "请先粘贴 S3 配置 JSON", Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            S3Config imported = gson.fromJson(payload, S3Config.class);
+            if (imported == null) throw new IllegalArgumentException("配置内容为空");
+            normalize(imported);
+            S3Client.validate(imported);
+            model.draft = imported;
+            endpoint.setText(imported.getEndpoint());
+            region.setText(imported.getRegion());
+            bucket.setText(imported.getBucket());
+            access.setText(imported.getAccessKey());
+            secret.setText(imported.getSecretKey());
+            pathStyle.setChecked(imported.isPathStyle());
+            importContent.setText("");
+            Toast.makeText(this, "配置已导入，请检查后点击保存", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            String message = e instanceof IllegalArgumentException && e.getMessage() != null
+                    ? e.getMessage() : "配置内容不是有效的 S3 JSON";
+            new MaterialAlertDialogBuilder(this).setTitle("配置导入失败")
+                    .setMessage(message).setPositiveButton("知道了", null).show();
+        }
+    }
+
+    private static void normalize(S3Config config) {
+        config.setBucket(trim(config.getBucket()));
+        config.setAccessKey(trim(config.getAccessKey()));
+        config.setSecretKey(trim(config.getSecretKey()));
+        config.setEndpoint(trim(config.getEndpoint()));
+        config.setRegion(trim(config.getRegion()));
+    }
+
+    private static String trim(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private S3Config collect() {

@@ -33,6 +33,13 @@ public class MappingEditorActivity extends AppCompatActivity {
     private TextInputEditText formats;
     private TextView directory;
     private CheckBox recursive;
+    private final ActivityResultLauncher<Intent> s3DirectoryPicker = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) return;
+                String selected = result.getData().getStringExtra(S3BrowserActivity.RESULT_PREFIX);
+                if (selected == null) return;
+                prefix.setText(selected);
+            });
     private final ActivityResultLauncher<Intent> directoryPicker = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) return;
@@ -71,6 +78,7 @@ public class MappingEditorActivity extends AppCompatActivity {
         directory = Ui.text(body, "本地目录：" + (draft.getTreeUri().isEmpty() ? "尚未选择" : draft.getLocalLabel()), 15);
         Ui.button(body, "选择本地目录／重新授权", this::chooseDirectory);
         prefix = Ui.field(body, "远端目录，例如 saves/device-a/", draft.getRemotePrefix(), false);
+        Ui.button(body, "浏览并选择 S3 目录", this::chooseS3Directory);
         formats = Ui.field(body, "文件扩展名，例如 sav,srm,state；* 表示全部", draft.getFormats(), false);
         recursive = new CheckBox(this);
         recursive.setText("包含所有子目录，并保留相对目录结构");
@@ -88,6 +96,14 @@ public class MappingEditorActivity extends AppCompatActivity {
             intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(draft.getTreeUri()));
         try { directoryPicker.launch(intent); }
         catch (Exception e) { toast("设备没有可用的系统目录选择器"); }
+    }
+
+    private void chooseS3Directory() {
+        if (app.controller().isBusy()) { toast("有任务正在处理，请完成后再浏览 S3"); return; }
+        Intent intent = new Intent(this, S3BrowserActivity.class)
+                .putExtra(S3BrowserActivity.EXTRA_SELECT_MODE, true)
+                .putExtra(S3BrowserActivity.EXTRA_PREFIX, Ui.value(prefix));
+        s3DirectoryPicker.launch(intent);
     }
 
     private void collect() {
