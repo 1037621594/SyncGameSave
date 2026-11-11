@@ -30,6 +30,7 @@ public class S3BrowserModel extends AndroidViewModel {
         private String nextMarker = "";
         private String message = "";
         private String error = "";
+        private String pendingDeletionKey = "";
         private boolean loading;
         private boolean loaded;
     }
@@ -49,13 +50,14 @@ public class S3BrowserModel extends AndroidViewModel {
 
     public LiveData<State> state() { return state; }
 
-    public void initialize(String initial) {
+    public void initialize(String initial, String pendingDeletionKey) {
         if (initialized) return;
         initialized = true;
         String directory;
         try { directory = normalizePrefix(initial); }
         catch (IllegalArgumentException e) { directory = ""; }
         state.getValue().setPrefix(directory);
+        state.getValue().setPendingDeletionKey(pendingDeletionKey == null ? "" : pendingDeletionKey);
         load(directory, false);
     }
 
@@ -136,9 +138,14 @@ public class S3BrowserModel extends AndroidViewModel {
     public void delete(RemoteFile file) {
         State current = state.getValue();
         if (current.isLoading() || cleared) return;
+        if (!current.getPendingDeletionKey().isEmpty() && !current.getPendingDeletionKey().equals(file.getKey())) {
+            report("请先重试完成上一个文件的删除清理");
+            return;
+        }
         current.setLoading(true);
-        current.setMessage("正在删除：" + file.getKey());
+        current.setMessage("正在删除云端及本地映射文件：" + file.getKey());
         current.setError("");
+        current.setPendingDeletionKey(file.getKey());
         state.setValue(current);
         deleting = true;
         activeToken = new CancellationToken();
@@ -149,9 +156,10 @@ public class S3BrowserModel extends AndroidViewModel {
             activeToken = null;
             deleting = false;
             current.setLoading(false);
-            if (error == null) app.controller().clearHistory();
+            app.controller().clearHistory();
             if (cleared) return;
             if (error == null) {
+                current.setPendingDeletionKey("");
                 load(current.getPrefix(), false);
             } else {
                 current.setMessage("");

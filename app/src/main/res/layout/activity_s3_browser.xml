@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="?attr/colorSurface">
+    <com.google.android.material.appbar.MaterialToolbar android:id="@+id/s3Toolbar"
+        android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+        app:title="S3 文件" />
+    <HorizontalScrollView android:id="@+id/s3BreadcrumbScroll" android:layout_width="match_parent"
+        android:layout_height="48dp" android:fillViewport="true" android:scrollbars="none">
+        <LinearLayout android:id="@+id/s3Breadcrumbs" android:layout_width="wrap_content"
+            android:layout_height="match_parent" android:orientation="horizontal"
+            android:gravity="center_vertical" android:paddingStart="12dp" android:paddingEnd="12dp" />
+    </HorizontalScrollView>
+    <TextView android:id="@+id/s3Status" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:paddingStart="20dp" android:paddingEnd="20dp" android:paddingTop="8dp" android:paddingBottom="8dp"
+        android:textSize="12sp" android:textColor="?android:attr/textColorSecondary" />
+    <ProgressBar android:id="@+id/s3Loading" style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent" android:layout_height="3dp" android:indeterminate="true"
+        android:visibility="invisible" />
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <ListView android:id="@+id/s3FileList" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:divider="@null" android:clipToPadding="false" android:paddingBottom="12dp"
+            android:scrollbarStyle="outsideOverlay" android:drawSelectorOnTop="true" />
+        <LinearLayout android:id="@+id/s3EmptyState" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:orientation="vertical" android:gravity="center" android:padding="32dp">
+            <ImageView android:layout_width="64dp" android:layout_height="64dp"
+                android:src="@drawable/ic_s3_folder" android:alpha="0.6" android:importantForAccessibility="no" />
+            <TextView android:id="@+id/s3EmptyMessage" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" android:textSize="15sp" android:gravity="center"
+                android:textColor="?android:attr/textColorSecondary" />
+        </LinearLayout>
+    </FrameLayout>
+    <com.google.android.material.button.MaterialButton android:id="@+id/s3More"
+        style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="加载更多" android:visibility="gone" />
+    <LinearLayout android:id="@+id/s3SelectionBar" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp"
+        android:paddingTop="8dp" android:paddingBottom="12dp" android:visibility="gone">
+        <com.google.android.material.button.MaterialButton android:id="@+id/s3Choose"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:text="选择当前文件夹" />
+    </LinearLayout>
+</LinearLayout>

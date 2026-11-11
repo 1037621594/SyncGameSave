@@ -147,6 +147,40 @@ public class TreeFiles {
         return null;
     }
 
+    /** Check the exact mapped file and provider capability before deleting the cloud object. */
+    public LocalFile prepareDeletion(PathMapping mapping, String relative) throws IOException {
+        LocalFile local = find(mapping, relative);
+        if (local == null) return null;
+        try (Cursor cursor = resolver.query(local.getUri(), COLUMNS, null, null, null)) {
+            if (cursor == null) throw new IOException("读取待删除的本地文件失败：" + relative);
+            if (!cursor.moveToFirst()) return null;
+            if (DocumentsContract.Document.MIME_TYPE_DIR.equals(cursor.getString(2)))
+                throw new IOException("目标是目录，不能按文件删除：" + relative);
+            Node current = node(local.getUri(), cursor);
+            if ((current.getFlags() & DocumentsContract.Document.FLAG_SUPPORTS_DELETE) == 0)
+                throw new IOException("本地目录提供方不支持删除此文件：" + relative);
+            LocalFile checked = new LocalFile(current.getUri(), relative, current.getModified(), current.getSize());
+            if (!same(local, checked)) throw new IOException("本地文件检查期间发生变化，请重试：" + relative);
+            return checked;
+        } catch (SecurityException e) {
+            throw new IOException("本地文件访问授权失效，请重新授权后删除：" + relative, e);
+        }
+    }
+
+    /** Delete one file only; missing files are already complete and directories are never removed. */
+    public void delete(PathMapping mapping, String relative, LocalFile expected) throws IOException {
+        LocalFile current = find(mapping, relative);
+        if (current == null) return;
+        if (!same(expected, current)) throw new IOException("本地文件已变化，尚未删除，请重试：" + relative);
+        try {
+            if (!DocumentsContract.deleteDocument(resolver, current.getUri()))
+                throw new IOException("本地文件删除失败：" + relative);
+            if (find(mapping, relative) != null) throw new IOException("删除后本地文件仍存在，请重试：" + relative);
+        } catch (SecurityException e) {
+            throw new IOException("本地文件删除权限不足，请重新授权后重试：" + relative, e);
+        }
+    }
+
     private Uri resolveParent(PathMapping mapping, String relative, boolean create) throws IOException {
         PathRules.validateRelative(relative);
         String[] parts = relative.split("/");

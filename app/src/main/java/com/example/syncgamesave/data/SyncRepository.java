@@ -93,8 +93,8 @@ public class SyncRepository extends SQLiteOpenHelper {
         getWritableDatabase().delete("files", "mapping_id=?", new String[]{id});
     }
 
-    /** A later explicit upload may recreate a remotely deleted file if it still exists locally. */
-    public synchronized void forgetRemoteFile(String key) {
+    /** Clear the baseline after a cloud deletion and record whether local deletion completed. */
+    public synchronized void forgetRemoteFile(String key, boolean localFilesDeleted) {
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
         try {
@@ -104,7 +104,8 @@ public class SyncRepository extends SQLiteOpenHelper {
                 if (!PathRules.matches(mapping, relative)) continue;
                 db.delete("files", "mapping_id=? AND path=?", new String[]{mapping.getId(), relative});
                 mapping.setLastUploadTime(0);
-                mapping.setLastResult("远端文件已删除；再次上传时会重新上传仍存在的本地文件");
+                mapping.setLastResult(localFilesDeleted ? "云端文件及本地映射文件已删除"
+                        : "云端文件已删除，本地映射文件未全部删除，请重试清理");
                 saveMapping(mapping);
             }
             db.setTransactionSuccessful();
