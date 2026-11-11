@@ -36,6 +36,7 @@ public class SyncController {
     private volatile String activeId;
     private volatile String startupError;
     private volatile ConflictRequest pending;
+    private String busyMessage = "正在恢复同步状态，请稍候……";
     private long revision;
 
     public SyncController(SyncRepository repository, SecureConfigStore configStore, TreeFiles files) {
@@ -54,6 +55,7 @@ public class SyncController {
     public TaskStatus status(String id) { return statuses.get(id); }
     public boolean isBusy() { return busy.get(); }
     public String startupError() { return startupError; }
+    public String busyMessage() { return busyMessage; }
 
     public void clearHistory() { if (!busy.get()) { statuses.clear(); changed(); } }
     public void removeHistory(String id) { statuses.remove(id); changed(); }
@@ -63,6 +65,7 @@ public class SyncController {
     /** Uses the same lock and worker as synchronization, including across Activity recreation. */
     public <T> boolean runStorageTask(CancellationToken token, StorageTask<T> task, StorageCallback<T> callback) {
         if (!busy.compareAndSet(false, true)) return false;
+        busyMessage = "正在处理 S3 浏览或删除任务，请稍候……";
         changed();
         worker.execute(() -> {
             T result = null;
@@ -74,8 +77,8 @@ public class SyncController {
             Exception failure = error;
             main.post(() -> {
                 busy.set(false);
-                callback.complete(completed, failure);
-                changed();
+                try { callback.complete(completed, failure); }
+                finally { changed(); }
             });
         });
         return true;
@@ -179,6 +182,7 @@ public class SyncController {
 
     public void retryRecovery() {
         if (!busy.compareAndSet(false, true)) return;
+        busyMessage = "正在恢复同步状态，请稍候……";
         changed();
         worker.execute(() -> {
             try { files.recoverPending(); repository.recoverInterrupted(); startupError = null; }

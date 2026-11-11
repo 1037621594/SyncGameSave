@@ -295,6 +295,7 @@ public class S3Client implements ObjectStorage {
             if ("url".equals(encoding)) file.setKey(decode(file.getKey()));
             if (!file.getKey().startsWith(prefix) || file.getKey().substring(prefix.length()).contains("/"))
                 throw new IOException("S3 返回了当前目录范围外的文件");
+            if (file.getSize() < 0) throw new IOException("S3 对象大小格式不正确");
         }
         for (int i = 0; i < page.getDirectories().size(); i++) {
             String directory = page.getDirectories().get(i);

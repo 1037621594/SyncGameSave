@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import com.example.syncgamesave.model.FileState;
 import com.example.syncgamesave.model.PathMapping;
+import com.example.syncgamesave.storage.PathRules;
 import com.google.gson.Gson;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -90,6 +91,24 @@ public class SyncRepository extends SQLiteOpenHelper {
 
     public synchronized void clearFiles(String id) {
         getWritableDatabase().delete("files", "mapping_id=?", new String[]{id});
+    }
+
+    /** A later explicit upload may recreate a remotely deleted file if it still exists locally. */
+    public synchronized void forgetRemoteFile(String key) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            for (PathMapping mapping : mappings()) {
+                if (!key.startsWith(mapping.getRemotePrefix())) continue;
+                String relative = key.substring(mapping.getRemotePrefix().length());
+                if (!PathRules.matches(mapping, relative)) continue;
+                db.delete("files", "mapping_id=? AND path=?", new String[]{mapping.getId(), relative});
+                mapping.setLastUploadTime(0);
+                mapping.setLastResult("远端文件已删除；再次上传时会重新上传仍存在的本地文件");
+                saveMapping(mapping);
+            }
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
     }
 
     public synchronized void deleteMapping(String id) {

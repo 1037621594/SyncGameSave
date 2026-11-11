@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public class SyncEngine {
-    private static final String MANIFEST_PATH = "._syncgamesave/manifest.json";
+    public static final String MANIFEST_PATH = "._syncgamesave/manifest.json";
     private static final int COMPARISON_THREADS = 4;
     private final Gson gson = new Gson();
     public interface Progress { void update(String message, int done, int total); }

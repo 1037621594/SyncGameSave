@@ -112,7 +112,7 @@ public class MainActivity extends AppCompatActivity {
             TaskStatus status = controller.status(mapping.getId());
             if (status != null && status.isRunning()) running = true;
         }
-        if (controller.isBusy() && !running) Ui.text(container, "正在恢复同步状态，请稍候……", 14);
+        if (controller.isBusy() && !running) Ui.text(container, controller.busyMessage(), 14);
     }
 
     private void addCard(PathMapping mapping) {
