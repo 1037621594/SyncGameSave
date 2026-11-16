@@ -48,10 +48,12 @@ public class PokemonOverlayController {
     private final Runnable onExit;
     private final Handler main = new Handler(Looper.getMainLooper());
     private PokemonRecognizer recognizer;
+    private PokemonMatcher matcher;
     private PokemonData data;
     private TextView ball;
     private WindowManager.LayoutParams ballParams;
     private ResultCardView card;
+    private WindowManager.LayoutParams cardParams;
     private LinearLayout menu;
     /** Last selected region as fractions of the screen, valid only for the screen size it was selected on. */
     private RectF savedRegion;
@@ -74,7 +76,8 @@ public class PokemonOverlayController {
 
     public void start() throws IOException {
         data = PokemonRepository.load(context);
-        recognizer = new PokemonRecognizer(new PokemonMatcher(data));
+        matcher = new PokemonMatcher(data, PokemonAliasStore.load(context, data));
+        recognizer = new PokemonRecognizer(matcher);
         loadRegion();
         createBall();
         started = true;
@@ -300,6 +303,7 @@ public class PokemonOverlayController {
         int right = clamp(Math.round(fractions.right * frame.getWidth()), left + 1, frame.getWidth());
         int bottom = clamp(Math.round(fractions.bottom * frame.getHeight()), top + 1, frame.getHeight());
         Bitmap crop = Bitmap.createBitmap(frame, left, top, right - left, bottom - top);
+        matcher.setAliases(PokemonAliasStore.load(context, data));
         showCard();
         card.showLoading("识别中……");
         recognizer.recognize(crop, PokemonSettings.retries(context), new PokemonRecognizer.Callback() {
@@ -433,13 +437,15 @@ public class PokemonOverlayController {
         card = new ResultCardView(context, Math.round(size.y * 0.55f), new ResultCardView.Listener() {
             @Override public void onClose() { removeCard(); }
             @Override public void onSelect(int candidateIndex) { showCandidate(candidateIndex); }
+            @Override public void onSearch(String query) { searchManually(query); }
+            @Override public void onSearchModeChanged(boolean enabled) { setCardSearchMode(enabled); }
         });
-        WindowManager.LayoutParams params = overlayParams(Math.min(size.x - 2 * dp(12), dp(380)),
+        cardParams = overlayParams(Math.min(size.x - 2 * dp(12), dp(380)),
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
-        params.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        params.y = dp(24);
-        windowManager.addView(card, params);
+        cardParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        cardParams.y = dp(24);
+        windowManager.addView(card, cardParams);
         // Windows added later sit on top, so re-add the ball to keep it reachable above the card.
         if (ball != null) {
             windowManager.removeView(ball);
@@ -451,6 +457,32 @@ public class PokemonOverlayController {
         if (card == null) return;
         try { windowManager.removeView(card); } catch (RuntimeException ignored) { }
         card = null;
+        cardParams = null;
+    }
+
+    private void searchManually(String query) {
+        if (card == null) return;
+        if (query == null || query.trim().isEmpty()) {
+            card.showManualSearch("未找到宝可梦", "请输入宝可梦名称后搜索。", "");
+            return;
+        }
+        matcher.setAliases(PokemonAliasStore.load(context, data));
+        candidates = matcher.match(java.util.Collections.singletonList(query.trim()));
+        if (candidates.isEmpty()) {
+            card.showManualSearch("未找到宝可梦", "没有找到匹配项，请检查名称后重试。", query.trim());
+        } else showCandidate(0);
+    }
+
+    private void setCardSearchMode(boolean enabled) {
+        if (card == null || cardParams == null) return;
+        if (enabled) cardParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        else cardParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        try { windowManager.updateViewLayout(card, cardParams); } catch (RuntimeException ignored) { }
+        if (!enabled) {
+            android.view.inputmethod.InputMethodManager inputMethod =
+                    (android.view.inputmethod.InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (inputMethod != null) inputMethod.hideSoftInputFromWindow(card.getWindowToken(), 0);
+        }
     }
 
     // ---- helpers ----

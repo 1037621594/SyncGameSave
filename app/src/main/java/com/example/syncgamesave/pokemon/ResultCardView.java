@@ -5,6 +5,12 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.content.Context;
+import android.text.InputType;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -17,6 +23,8 @@ public class ResultCardView extends LinearLayout {
     public interface Listener {
         void onClose();
         void onSelect(int candidateIndex);
+        void onSearch(String query);
+        void onSearchModeChanged(boolean enabled);
     }
 
     private static class LimitedScrollView extends ScrollView {
@@ -84,12 +92,56 @@ public class ResultCardView extends LinearLayout {
     public void showMessage(String heading, String detail) {
         title.setText(heading);
         content.removeAllViews();
+        listener.onSearchModeChanged(false);
         TextView text = label(detail);
         text.setPadding(0, dp(8), 0, 0);
         content.addView(text);
     }
 
+    public void showManualSearch(String heading, String detail, String query) {
+        title.setText(heading);
+        content.removeAllViews();
+        listener.onSearchModeChanged(true);
+        TextView text = label(detail);
+        text.setPadding(0, dp(8), 0, dp(8));
+        content.addView(text);
+
+        LinearLayout row = new LinearLayout(getContext());
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        EditText input = new EditText(getContext());
+        input.setSingleLine(true);
+        input.setTextSize(14);
+        input.setTextColor(Color.WHITE);
+        input.setHintTextColor(0xFFB0B3B8);
+        input.setHint("输入宝可梦名称");
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+        input.setText(query);
+        row.addView(input, new LayoutParams(0, dp(48), 1));
+
+        Button search = new Button(getContext());
+        search.setText("搜索");
+        search.setOnClickListener(view -> listener.onSearch(input.getText().toString().trim()));
+        row.addView(search, new LayoutParams(-2, dp(48)));
+        input.setOnEditorActionListener((view, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH
+                    || (event != null && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER)) {
+                listener.onSearch(input.getText().toString().trim());
+                return true;
+            }
+            return false;
+        });
+        content.addView(row, new LayoutParams(-1, -2));
+        input.requestFocus();
+        input.post(() -> {
+            InputMethodManager inputMethod =
+                    (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (inputMethod != null) inputMethod.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT);
+        });
+    }
+
     public void showReport(List<MatchCandidate> candidates, int selected, MatchupReport report) {
+        listener.onSearchModeChanged(false);
         MatchCandidate current = candidates.get(selected);
         PokemonEntry pokemon = report.getPokemon();
         title.setText(String.format(Locale.ROOT, "#%03d %s", pokemon.getId(), pokemon.getName())

@@ -3,6 +3,8 @@ package com.example.syncgamesave.pokemon;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.regex.Pattern;
 import lombok.AllArgsConstructor;
 
@@ -17,16 +19,34 @@ public class PokemonMatcher {
         private final String name;
     }
 
+    private final List<Indexed> officialIndex = new ArrayList<>();
     private final List<Indexed> index = new ArrayList<>();
+    private final PokemonData data;
 
     public PokemonMatcher(PokemonData data) {
+        this(data, new LinkedHashMap<>());
+    }
+
+    public PokemonMatcher(PokemonData data, Map<String, Integer> aliases) {
+        this.data = data;
         for (PokemonEntry entry : data.getPokemon()) {
             String name = normalize(entry.getName());
-            if (!name.isEmpty()) index.add(new Indexed(entry, name));
+            if (!name.isEmpty()) officialIndex.add(new Indexed(entry, name));
+        }
+        setAliases(aliases);
+    }
+
+    public synchronized void setAliases(Map<String, Integer> aliases) {
+        index.clear();
+        index.addAll(officialIndex);
+        for (Map.Entry<String, Integer> alias : aliases.entrySet()) {
+            PokemonEntry entry = PokemonAliasStore.findById(data.getPokemon(), alias.getValue());
+            String name = normalize(alias.getKey());
+            if (entry != null && !name.isEmpty()) index.add(new Indexed(entry, name));
         }
     }
 
-    public List<MatchCandidate> match(List<String> lines) {
+    public synchronized List<MatchCandidate> match(List<String> lines) {
         List<String> texts = new ArrayList<>();
         for (String line : lines) {
             String text = normalize(line);
@@ -48,6 +68,7 @@ public class PokemonMatcher {
             else if (best <= allowed) fuzzy.add(new MatchCandidate(item.entry, 1.0 - (double) best / length, false));
         }
         List<MatchCandidate> result = exact.isEmpty() ? fuzzy : dropContained(exact);
+        result = uniqueByPokemon(result);
         Collections.sort(result, (a, b) -> {
             int byScore = Double.compare(b.getScore(), a.getScore());
             if (byScore != 0) return byScore;
@@ -56,6 +77,16 @@ public class PokemonMatcher {
             return byLength != 0 ? byLength : Integer.compare(a.getPokemon().getId(), b.getPokemon().getId());
         });
         return result.size() > MAX_CANDIDATES ? new ArrayList<>(result.subList(0, MAX_CANDIDATES)) : result;
+    }
+
+    private static List<MatchCandidate> uniqueByPokemon(List<MatchCandidate> candidates) {
+        Map<Integer, MatchCandidate> unique = new LinkedHashMap<>();
+        for (MatchCandidate candidate : candidates) {
+            MatchCandidate old = unique.get(candidate.getPokemon().getId());
+            if (old == null || candidate.getScore() > old.getScore()
+                    || (candidate.isExact() && !old.isExact())) unique.put(candidate.getPokemon().getId(), candidate);
+        }
+        return new ArrayList<>(unique.values());
     }
 
     /** A name that is only a substring of another matched name is a false hit, so the longer name wins. */

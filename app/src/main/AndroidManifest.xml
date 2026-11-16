@@ -20,6 +20,7 @@
         <activity android:name=".ui.S3ConfigActivity" android:exported="false" />
         <activity android:name=".ui.S3BrowserActivity" android:exported="false" />
         <activity android:name=".ui.SettingsActivity" android:exported="false" />
+        <activity android:name=".ui.PokemonAliasActivity" android:exported="false" />
         <activity android:name=".pokemon.PokemonLaunchActivity" android:exported="false"
             android:theme="@style/Theme.SyncGameSave.Transparent"
             android:configChanges="orientation|screenSize|keyboardHidden" />

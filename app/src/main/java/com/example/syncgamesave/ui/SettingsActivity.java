@@ -1,6 +1,7 @@
 package com.example.syncgamesave.ui;
 
 import android.os.Bundle;
+import android.content.Intent;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.widget.LinearLayout;
@@ -24,6 +25,7 @@ public class SettingsActivity extends AppCompatActivity {
         retries.setInputType(InputType.TYPE_CLASS_NUMBER);
         retries.setFilters(new InputFilter[] {new InputFilter.LengthFilter(3)});
         Ui.button(body, "保存", this::save);
+        Ui.button(body, "管理宝可梦别名", () -> startActivity(new Intent(this, PokemonAliasActivity.class)));
     }
 
     private void save() {
