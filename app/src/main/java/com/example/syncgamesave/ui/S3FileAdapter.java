@@ -14,6 +14,7 @@ import com.example.syncgamesave.sync.RemoteFileDeletion;
 import com.google.android.material.color.MaterialColors;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -47,6 +48,8 @@ public class S3FileAdapter extends BaseAdapter {
     private final List<Entry> entries = new ArrayList<>();
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("MM-dd HH:mm", Locale.getDefault());
     private boolean enabled = true;
+    private boolean deleteSelection;
+    private Set<String> selectedKeys = Collections.emptySet();
 
     public S3FileAdapter(Context context) {
         this.context = context;
@@ -56,6 +59,8 @@ public class S3FileAdapter extends BaseAdapter {
     public void submit(S3BrowserModel.State state, boolean selectMode, boolean deleteSelection,
                        Set<String> selectedKeys) {
         entries.clear();
+        this.deleteSelection = deleteSelection;
+        this.selectedKeys = selectedKeys;
         enabled = !state.isLoading();
         String pending = selectMode ? "" : state.getPendingDeletionKey();
         boolean pendingVisible = false;

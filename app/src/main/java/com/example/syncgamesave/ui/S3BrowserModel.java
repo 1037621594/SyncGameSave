@@ -81,6 +81,11 @@ public class S3BrowserModel extends AndroidViewModel {
     }
 
     private void load(String directory, boolean more) {
+        load(directory, more, "");
+    }
+
+    /** Loads a page; a non-empty keptError stays visible after a successful reload. */
+    private void load(String directory, boolean more, String keptError) {
         State current = state.getValue();
         if (current.isLoading() || cleared) return;
         if (app.controller().isBusy()) { report("有任务正在处理，请完成后刷新 S3 列表"); return; }
@@ -94,7 +99,7 @@ public class S3BrowserModel extends AndroidViewModel {
             visitedMarkers.clear();
         }
         current.setLoading(true);
-        current.setError("");
+        current.setError(keptError);
         current.setMessage("正在读取 S3 目录……");
         state.setValue(current);
         activeToken = new CancellationToken();
@@ -124,7 +129,7 @@ public class S3BrowserModel extends AndroidViewModel {
                         current.setNextMarker(page.getNextMarker());
                         current.setLoaded(true);
                         current.setMessage("");
-                        current.setError("");
+                        current.setError(keptError);
                     }
                     state.setValue(current);
                 });
@@ -220,10 +225,9 @@ public class S3BrowserModel extends AndroidViewModel {
                 current.setPendingDeletionKey("");
                 load(current.getPrefix(), false);
             } else {
+                // Files deleted before the failure are already gone, so reload the list and keep the error visible.
                 current.setPendingDeletionKey(failedKey[0]);
-                current.setMessage("");
-                current.setError("批量删除未完成：" + SyncEngine.message(error));
-                state.setValue(current);
+                load(current.getPrefix(), false, "批量删除未完成：" + SyncEngine.message(error));
             }
         });
         if (!started) {
