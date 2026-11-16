@@ -175,6 +175,66 @@ public class S3BrowserModel extends AndroidViewModel {
         }
     }
 
+    /** Deletes selected objects in order so each object uses the same local mapping cleanup flow. */
+    public void delete(List<RemoteFile> selected) {
+        if (selected == null || selected.isEmpty()) return;
+        State current = state.getValue();
+        if (current.isLoading() || cleared) return;
+        if (!current.getPendingDeletionKey().isEmpty()) {
+            boolean includesPending = false;
+            for (RemoteFile file : selected) {
+                if (current.getPendingDeletionKey().equals(file.getKey())) {
+                    includesPending = true;
+                    break;
+                }
+            }
+            if (!includesPending) {
+                report("请先重试完成上一个文件的删除清理");
+                return;
+            }
+        }
+        List<RemoteFile> files = new ArrayList<>(selected);
+        String previousPending = current.getPendingDeletionKey();
+        final String[] failedKey = {files.get(0).getKey()};
+        current.setLoading(true);
+        current.setMessage("正在删除已选云端及本地映射文件（" + files.size() + " 个）……");
+        current.setError("");
+        current.setPendingDeletionKey("");
+        state.setValue(current);
+        deleting = true;
+        activeToken = new CancellationToken();
+        boolean started = app.controller().runStorageTask(activeToken, (client, token) -> {
+            for (RemoteFile file : files) {
+                failedKey[0] = file.getKey();
+                token.check();
+                RemoteFileDeletion.delete(client, file, new TreeFiles(app), app.repository(), token);
+            }
+            return files.size();
+        }, (count, error) -> {
+            activeToken = null;
+            deleting = false;
+            current.setLoading(false);
+            app.controller().clearHistory();
+            if (cleared) return;
+            if (error == null) {
+                current.setPendingDeletionKey("");
+                load(current.getPrefix(), false);
+            } else {
+                current.setPendingDeletionKey(failedKey[0]);
+                current.setMessage("");
+                current.setError("批量删除未完成：" + SyncEngine.message(error));
+                state.setValue(current);
+            }
+        });
+        if (!started) {
+            activeToken = null;
+            deleting = false;
+            current.setLoading(false);
+            current.setPendingDeletionKey(previousPending);
+            report("有任务正在处理，请完成后重试删除");
+        }
+    }
+
     private void report(String error) {
         State current = state.getValue();
         current.setError(error);

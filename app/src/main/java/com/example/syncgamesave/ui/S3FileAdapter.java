@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.TextView;
 import com.example.syncgamesave.R;
@@ -15,6 +16,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -37,6 +39,7 @@ public class S3FileAdapter extends BaseAdapter {
         private final TextView name;
         private final TextView subtitle;
         private final View chevron;
+        private final CheckBox check;
     }
 
     private final Context context;
@@ -50,7 +53,8 @@ public class S3FileAdapter extends BaseAdapter {
         inflater = LayoutInflater.from(context);
     }
 
-    public void submit(S3BrowserModel.State state, boolean selectMode) {
+    public void submit(S3BrowserModel.State state, boolean selectMode, boolean deleteSelection,
+                       Set<String> selectedKeys) {
         entries.clear();
         enabled = !state.isLoading();
         String pending = selectMode ? "" : state.getPendingDeletionKey();
@@ -87,13 +91,19 @@ public class S3FileAdapter extends BaseAdapter {
         if (row == null) {
             row = inflater.inflate(R.layout.item_s3_file, parent, false);
             holder = new Holder(row.findViewById(R.id.s3EntryIcon), row.findViewById(R.id.s3EntryName),
-                    row.findViewById(R.id.s3EntrySubtitle), row.findViewById(R.id.s3EntryChevron));
+                    row.findViewById(R.id.s3EntrySubtitle), row.findViewById(R.id.s3EntryChevron),
+                    row.findViewById(R.id.s3EntryCheck));
             row.setTag(holder);
         } else holder = (Holder) row.getTag();
         Entry entry = getItem(position);
         holder.icon.setImageResource(entry.isDirectory() ? R.drawable.ic_s3_folder : R.drawable.ic_s3_file);
         holder.name.setText(entry.getName());
         holder.chevron.setVisibility(entry.isDirectory() ? View.VISIBLE : View.GONE);
+        boolean selectable = deleteSelection && !entry.isDirectory() && !entry.isPendingDeletion()
+                && !RemoteFileDeletion.isMetadata(entry.getKey());
+        holder.check.setVisibility(selectable ? View.VISIBLE : View.GONE);
+        holder.check.setEnabled(selectable);
+        holder.check.setChecked(selectable && selectedKeys.contains(entry.getKey()));
         if (entry.isPendingDeletion()) holder.subtitle.setText("删除尚未完成 · 长按重试");
         else if (entry.isDirectory()) holder.subtitle.setText(RemoteFileDeletion.isMetadata(entry.getKey()) ? "同步元数据文件夹" : "文件夹");
         else {

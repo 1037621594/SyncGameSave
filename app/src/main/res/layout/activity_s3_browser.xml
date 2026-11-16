@@ -40,4 +40,10 @@
         <com.google.android.material.button.MaterialButton android:id="@+id/s3Choose"
             android:layout_width="match_parent" android:layout_height="wrap_content" android:text="选择当前文件夹" />
     </LinearLayout>
+    <LinearLayout android:id="@+id/s3DeleteBar" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:paddingStart="16dp" android:paddingEnd="16dp"
+        android:paddingTop="8dp" android:paddingBottom="12dp" android:visibility="gone">
+        <com.google.android.material.button.MaterialButton android:id="@+id/s3DeleteSelected"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:text="删除已选文件" />
+    </LinearLayout>
 </LinearLayout>

@@ -32,6 +32,10 @@ import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import java.util.Objects;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class S3BrowserActivity extends AppCompatActivity {
     public static final String EXTRA_SELECT_MODE = "select_mode";
@@ -40,6 +44,7 @@ public class S3BrowserActivity extends AppCompatActivity {
     private static final int MENU_REFRESH = 1;
     private static final int MENU_UP = 2;
     private static final int MENU_JUMP = 3;
+    private static final int MENU_SELECT_DELETE = 4;
 
     private S3BrowserModel model;
     private S3FileAdapter adapter;
@@ -52,7 +57,10 @@ public class S3BrowserActivity extends AppCompatActivity {
     private TextView emptyMessage;
     private Button choose;
     private Button more;
+    private Button deleteSelected;
     private boolean selectMode;
+    private boolean deleteSelectionMode;
+    private final Set<String> selectedKeys = new HashSet<>();
     private String renderedPrefix;
     private AlertDialog fileDialog;
     private BottomSheetDialog actionSheet;
@@ -78,11 +86,20 @@ public class S3BrowserActivity extends AppCompatActivity {
         choose = findViewById(R.id.s3Choose);
         findViewById(R.id.s3SelectionBar).setVisibility(selectMode ? View.VISIBLE : View.GONE);
         choose.setOnClickListener(view -> selectCurrent());
+        deleteSelected = findViewById(R.id.s3DeleteSelected);
+        deleteSelected.setOnClickListener(view -> confirmDeleteSelected());
         fileList = findViewById(R.id.s3FileList);
         adapter = new S3FileAdapter(this);
         fileList.setAdapter(adapter);
-        fileList.setOnItemClickListener((parent, view, position, id) -> openEntry(adapter.getItem(position)));
+        fileList.setOnItemClickListener((parent, view, position, id) -> {
+            S3FileAdapter.Entry entry = adapter.getItem(position);
+            if (deleteSelectionMode) {
+                if (!entry.isDirectory() && !entry.isPendingDeletion()
+                        && !RemoteFileDeletion.isMetadata(entry.getKey())) toggleSelected(entry.getKey());
+            } else openEntry(entry);
+        });
         fileList.setOnItemLongClickListener((parent, view, position, id) -> {
+            if (deleteSelectionMode) return true;
             showActions(adapter.getItem(position));
             return true;
         });
@@ -100,6 +117,7 @@ public class S3BrowserActivity extends AppCompatActivity {
         menu.add(Menu.NONE, MENU_REFRESH, Menu.NONE, "刷新").setIcon(refreshIcon).setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
         menu.add(Menu.NONE, MENU_UP, Menu.NONE, "上一级");
         menu.add(Menu.NONE, MENU_JUMP, Menu.NONE, "跳转到路径");
+        menu.add(Menu.NONE, MENU_SELECT_DELETE, Menu.NONE, "多选删除");
         return true;
     }
 
@@ -109,6 +127,10 @@ public class S3BrowserActivity extends AppCompatActivity {
         menu.findItem(MENU_REFRESH).setEnabled(enabled);
         menu.findItem(MENU_UP).setEnabled(enabled && !state.getPrefix().isEmpty());
         menu.findItem(MENU_JUMP).setEnabled(enabled);
+        MenuItem selectDelete = menu.findItem(MENU_SELECT_DELETE);
+        selectDelete.setVisible(!selectMode && state.isLoaded() && state.getPendingDeletionKey().isEmpty());
+        selectDelete.setEnabled(enabled);
+        selectDelete.setTitle(deleteSelectionMode ? "退出多选" : "多选删除");
         return super.onPrepareOptionsMenu(menu);
     }
 
@@ -118,16 +140,23 @@ public class S3BrowserActivity extends AppCompatActivity {
             if (item.getItemId() == MENU_REFRESH) { model.enter(state.getPrefix()); return true; }
             if (item.getItemId() == MENU_UP) { model.up(); return true; }
             if (item.getItemId() == MENU_JUMP) { showJumpDialog(); return true; }
+            if (item.getItemId() == MENU_SELECT_DELETE) {
+                deleteSelectionMode = !deleteSelectionMode;
+                selectedKeys.clear();
+                render(state);
+                return true;
+            }
         }
         return super.onOptionsItemSelected(item);
     }
 
     private void render(S3BrowserModel.State state) {
         boolean sameDirectory = Objects.equals(renderedPrefix, state.getPrefix());
+        if (!sameDirectory) selectedKeys.clear();
         int position = fileList.getFirstVisiblePosition();
         View first = fileList.getChildAt(0);
         int offset = first == null ? 0 : first.getTop();
-        adapter.submit(state, selectMode);
+        adapter.submit(state, selectMode, deleteSelectionMode, selectedKeys);
         if (sameDirectory) fileList.setSelectionFromTop(position, offset);
         else fileList.setSelection(0);
         boolean enabled = !state.isLoading();
@@ -139,10 +168,15 @@ public class S3BrowserActivity extends AppCompatActivity {
         more.setEnabled(enabled);
         choose.setEnabled(enabled && state.isLoaded() && !state.getPrefix().isEmpty()
                 && !RemoteFileDeletion.isMetadata(state.getPrefix()));
+        View deleteBar = findViewById(R.id.s3DeleteBar);
+        deleteBar.setVisibility(deleteSelectionMode ? View.VISIBLE : View.GONE);
+        deleteSelected.setEnabled(enabled && !selectedKeys.isEmpty());
+        deleteSelected.setText(selectedKeys.isEmpty() ? "删除已选文件" : "删除已选文件（" + selectedKeys.size() + "）");
         int directories = 0;
         for (String directory : state.getDirectories())
             if (!selectMode || !RemoteFileDeletion.isMetadata(directory)) directories++;
-        String summary = directories + " 个文件夹 · " + state.getFiles().size() + " 个文件 · 长按操作";
+        String summary = directories + " 个文件夹 · " + state.getFiles().size() + " 个文件 · "
+                + (deleteSelectionMode ? "点击选择文件" : "长按操作");
         if (!state.getMessage().isEmpty()) summary = state.getMessage();
         if (!state.getError().isEmpty()) summary += "\n" + state.getError();
         else if (!state.getPendingDeletionKey().isEmpty() && enabled) summary += "\n有未完成的删除，长按待处理文件重试";
@@ -198,6 +232,36 @@ public class S3BrowserActivity extends AppCompatActivity {
         if (entry.isDirectory()) model.enter(entry.getKey());
         else if (entry.isPendingDeletion()) showPendingDetails(entry.getKey());
         else showFile(entry.getFile());
+    }
+
+    private void toggleSelected(String key) {
+        if (!selectedKeys.add(key)) selectedKeys.remove(key);
+        S3BrowserModel.State state = model.state().getValue();
+        if (state != null) render(state);
+    }
+
+    private void confirmDeleteSelected() {
+        if (selectedKeys.isEmpty()) return;
+        List<RemoteFile> files = new ArrayList<>();
+        for (int i = 0; i < adapter.getCount(); i++) {
+            S3FileAdapter.Entry entry = adapter.getItem(i);
+            if (selectedKeys.contains(entry.getKey()) && !entry.isDirectory()
+                    && !entry.isPendingDeletion() && !RemoteFileDeletion.isMetadata(entry.getKey())
+                    && entry.getFile() != null) files.add(entry.getFile());
+        }
+        if (files.isEmpty()) {
+            selectedKeys.clear();
+            render(model.state().getValue());
+            return;
+        }
+        fileDialog = new MaterialAlertDialogBuilder(this).setTitle("删除已选云端及本地映射文件？")
+                .setMessage("将删除选中的 " + files.size() + " 个云端文件，并同步删除当前设备匹配映射中的本地文件。映射配置和目录保留，删除后无法通过此应用恢复。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除", (dialog, which) -> {
+                    deleteSelectionMode = false;
+                    selectedKeys.clear();
+                    model.delete(files);
+                }).show();
     }
 
     private void showActions(S3FileAdapter.Entry entry) {
@@ -333,6 +397,13 @@ public class S3BrowserActivity extends AppCompatActivity {
     }
 
     @Override public void onBackPressed() {
+        if (deleteSelectionMode) {
+            deleteSelectionMode = false;
+            selectedKeys.clear();
+            S3BrowserModel.State current = model.state().getValue();
+            if (current != null) render(current);
+            return;
+        }
         S3BrowserModel.State state = model.state().getValue();
         if (state != null && !state.isLoading() && !state.getPrefix().isEmpty()) model.up();
         else super.onBackPressed();
