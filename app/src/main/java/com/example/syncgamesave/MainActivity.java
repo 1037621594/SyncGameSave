@@ -20,6 +20,7 @@ import com.example.syncgamesave.model.ConflictRequest;
 import com.example.syncgamesave.model.PathMapping;
 import com.example.syncgamesave.model.SyncResult;
 import com.example.syncgamesave.model.TaskStatus;
+import com.example.syncgamesave.pokemon.PokemonLaunchActivity;
 import com.example.syncgamesave.sync.SyncController;
 import com.example.syncgamesave.ui.MappingEditorActivity;
 import com.example.syncgamesave.ui.S3BrowserActivity;
@@ -72,6 +73,8 @@ public class MainActivity extends AppCompatActivity {
             if (item.getItemId() == R.id.menu_add_path) editMapping(null);
             else if (item.getItemId() == R.id.menu_s3_config) editConfig();
             else if (item.getItemId() == R.id.menu_s3_browser) browseS3();
+            else if (item.getItemId() == R.id.menu_pokemon_tool)
+                startActivity(new Intent(this, PokemonLaunchActivity.class));
             return false;
         });
         controller.changes().observe(this, revision -> { render(); uploadPending(); });
