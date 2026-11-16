@@ -10,4 +10,6 @@ public class PokemonEntry {
     private int id;
     private String name;
     private int[] types = new int[0];
+    /** Base stats in order: HP, attack, defense, special attack, special defense, speed. Empty in older data files. */
+    private int[] stats = new int[0];
 }

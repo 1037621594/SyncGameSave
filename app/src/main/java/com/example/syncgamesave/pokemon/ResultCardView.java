@@ -5,7 +5,6 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
-import android.view.View;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -33,9 +32,14 @@ public class ResultCardView extends LinearLayout {
         }
     }
 
+    /** Same order as {@link PokemonEntry#getStats()}. */
+    private static final String[] STAT_NAMES = {"HP", "物攻", "物防", "特攻", "特防", "速度"};
+
     private final Listener listener;
     private final float density;
     private final TextView title;
+    private final LinearLayout stats;
+    private final TextView[] statCells = new TextView[STAT_NAMES.length];
     private final LinearLayout content;
 
     public ResultCardView(Context context, int maxContentHeight, Listener listener) {
@@ -57,6 +61,29 @@ public class ResultCardView extends LinearLayout {
         title.setTextSize(18);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         header.addView(title, new LayoutParams(0, -2, 1));
+        // Base stats sit in the header between the name and the close button, in two columns of three.
+        stats = new LinearLayout(context);
+        stats.setOrientation(HORIZONTAL);
+        stats.setVisibility(GONE);
+        int perColumn = STAT_NAMES.length / 2;
+        for (int column = 0; column < 2; column++) {
+            LinearLayout cells = new LinearLayout(context);
+            cells.setOrientation(VERTICAL);
+            for (int row = 0; row < perColumn; row++) {
+                TextView cell = new TextView(context);
+                cell.setTextColor(0xFFD0D3D8);
+                cell.setTextSize(11);
+                cell.setSingleLine(true);
+                statCells[column * perColumn + row] = cell;
+                cells.addView(cell, new LayoutParams(-2, -2));
+            }
+            LayoutParams cellsParams = new LayoutParams(-2, -2);
+            if (column > 0) cellsParams.setMargins(dp(8), 0, 0, 0);
+            stats.addView(cells, cellsParams);
+        }
+        LayoutParams statsParams = new LayoutParams(-2, -2);
+        statsParams.setMargins(dp(8), 0, 0, 0);
+        header.addView(stats, statsParams);
         TextView close = new TextView(context);
         close.setText("✕");
         close.setTextColor(0xFFCCCCCC);
@@ -76,11 +103,13 @@ public class ResultCardView extends LinearLayout {
 
     public void showLoading(String heading) {
         title.setText(heading);
+        stats.setVisibility(GONE);
         content.removeAllViews();
     }
 
     public void showMessage(String heading, String detail) {
         title.setText(heading);
+        stats.setVisibility(GONE);
         content.removeAllViews();
         TextView text = label(detail);
         text.setPadding(0, dp(8), 0, 0);
@@ -92,6 +121,7 @@ public class ResultCardView extends LinearLayout {
         PokemonEntry pokemon = report.getPokemon();
         title.setText(String.format(Locale.ROOT, "#%03d %s", pokemon.getId(), pokemon.getName())
                 + (current.isExact() ? "" : "（模糊匹配）"));
+        showStats(pokemon.getStats());
         content.removeAllViews();
         if (candidates.size() > 1) addCandidates(candidates, selected);
         addRow("属性", report.getTypes(), report, "");
@@ -118,6 +148,16 @@ public class ResultCardView extends LinearLayout {
         }
         scroll.addView(row);
         content.addView(scroll, new LayoutParams(-1, -2));
+    }
+
+    /** Older data files have no stats, in which case the header area stays hidden. */
+    private void showStats(int[] values) {
+        if (values.length != STAT_NAMES.length) {
+            stats.setVisibility(GONE);
+            return;
+        }
+        for (int i = 0; i < STAT_NAMES.length; i++) statCells[i].setText(STAT_NAMES[i] + ":" + values[i]);
+        stats.setVisibility(VISIBLE);
     }
 
     private void addRow(String heading, List<Integer> types, MatchupReport report, String suffix) {

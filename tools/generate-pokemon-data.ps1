@@ -62,16 +62,26 @@ foreach ($row in (Get-Csv 'pokemon_types.csv' | Sort-Object { [int]$_.pokemon_id
     $typesByPokemon[$pokemonId].Add($typeIndexById[[int]$row.type_id])
 }
 
+# Base stats in PokeAPI stat order: HP, attack, defense, special attack, special defense, speed.
+$statsByPokemon = @{}
+foreach ($row in Get-Csv 'pokemon_stats.csv') {
+    $statId = [int]$row.stat_id
+    if ($statId -lt 1 -or $statId -gt 6) { continue }
+    $pokemonId = [int]$row.pokemon_id
+    if (-not $statsByPokemon.ContainsKey($pokemonId)) { $statsByPokemon[$pokemonId] = [int[]]::new(6) }
+    $statsByPokemon[$pokemonId][$statId - 1] = [int]$row.base_stat
+}
+
 $pokemon = [System.Collections.Generic.List[object]]::new()
 $missing = [System.Collections.Generic.List[int]]::new()
 foreach ($row in (Get-Csv 'pokemon.csv' | Where-Object { $_.is_default -eq '1' } | Sort-Object { [int]$_.species_id })) {
     $speciesId = [int]$row.species_id
     $pokemonId = [int]$row.id
-    if (-not $names.ContainsKey($speciesId) -or -not $typesByPokemon.ContainsKey($pokemonId)) {
+    if (-not $names.ContainsKey($speciesId) -or -not $typesByPokemon.ContainsKey($pokemonId) -or -not $statsByPokemon.ContainsKey($pokemonId)) {
         $missing.Add($speciesId)
         continue
     }
-    $pokemon.Add([pscustomobject]@{ id = $speciesId; name = $names[$speciesId]; types = [int[]]$typesByPokemon[$pokemonId] })
+    $pokemon.Add([pscustomobject]@{ id = $speciesId; name = $names[$speciesId]; types = [int[]]$typesByPokemon[$pokemonId]; stats = [int[]]$statsByPokemon[$pokemonId] })
 }
 if ($pokemon.Count -eq 0) { throw '没有生成任何宝可梦数据' }
 
@@ -84,4 +94,4 @@ $json = $result | ConvertTo-Json -Depth 6 -Compress
 [IO.File]::WriteAllText($output, $json, [Text.UTF8Encoding]::new($false))
 
 Write-Host "已生成 $output（$($pokemon.Count) 只宝可梦）"
-if ($missing.Count -gt 0) { Write-Warning "以下图鉴编号缺少简体中文名或属性，已跳过：$($missing -join ', ')" }
+if ($missing.Count -gt 0) { Write-Warning "以下图鉴编号缺少简体中文名、属性或种族值，已跳过：$($missing -join ', ')" }
