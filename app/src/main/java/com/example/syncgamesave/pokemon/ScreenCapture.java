@@ -19,12 +19,7 @@ import java.nio.ByteBuffer;
  * Keeps one virtual display alive and hands out the newest frame on request. Android 14 allows only one
  * virtual display per projection token, so the display is created once and reused for every capture.
  */
-public class ScreenCapture {
-    public interface Callback {
-        void onFrame(Bitmap frame);
-        void onError(String message);
-    }
-
+public class ScreenCapture implements FrameSource {
     /** Lets overlay windows that were hidden by the caller disappear from the stream before grabbing a frame. */
     private static final long SETTLE_MS = 150;
     private static final long TIMEOUT_MS = 900;

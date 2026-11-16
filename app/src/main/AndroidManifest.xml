@@ -24,6 +24,15 @@
             android:configChanges="orientation|screenSize|keyboardHidden" />
         <service android:name=".pokemon.PokemonOverlayService" android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+        <service android:name=".pokemon.PokemonAccessibilityService" android:exported="true"
+            android:label="宝可梦工具截屏"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/pokemon_accessibility_config" />
+        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true">
