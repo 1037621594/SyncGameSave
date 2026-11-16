@@ -38,8 +38,6 @@ public class ResultCardView extends LinearLayout {
     private final Listener listener;
     private final float density;
     private final TextView title;
-    private final LinearLayout stats;
-    private final TextView[] statCells = new TextView[STAT_NAMES.length];
     private final LinearLayout content;
 
     public ResultCardView(Context context, int maxContentHeight, Listener listener) {
@@ -61,29 +59,6 @@ public class ResultCardView extends LinearLayout {
         title.setTextSize(18);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         header.addView(title, new LayoutParams(0, -2, 1));
-        // Base stats sit in the header between the name and the close button, in two columns of three.
-        stats = new LinearLayout(context);
-        stats.setOrientation(HORIZONTAL);
-        stats.setVisibility(GONE);
-        int perColumn = STAT_NAMES.length / 2;
-        for (int column = 0; column < 2; column++) {
-            LinearLayout cells = new LinearLayout(context);
-            cells.setOrientation(VERTICAL);
-            for (int row = 0; row < perColumn; row++) {
-                TextView cell = new TextView(context);
-                cell.setTextColor(0xFFD0D3D8);
-                cell.setTextSize(11);
-                cell.setSingleLine(true);
-                statCells[column * perColumn + row] = cell;
-                cells.addView(cell, new LayoutParams(-2, -2));
-            }
-            LayoutParams cellsParams = new LayoutParams(-2, -2);
-            if (column > 0) cellsParams.setMargins(dp(8), 0, 0, 0);
-            stats.addView(cells, cellsParams);
-        }
-        LayoutParams statsParams = new LayoutParams(-2, -2);
-        statsParams.setMargins(dp(8), 0, 0, 0);
-        header.addView(stats, statsParams);
         TextView close = new TextView(context);
         close.setText("✕");
         close.setTextColor(0xFFCCCCCC);
@@ -103,13 +78,11 @@ public class ResultCardView extends LinearLayout {
 
     public void showLoading(String heading) {
         title.setText(heading);
-        stats.setVisibility(GONE);
         content.removeAllViews();
     }
 
     public void showMessage(String heading, String detail) {
         title.setText(heading);
-        stats.setVisibility(GONE);
         content.removeAllViews();
         TextView text = label(detail);
         text.setPadding(0, dp(8), 0, 0);
@@ -121,10 +94,9 @@ public class ResultCardView extends LinearLayout {
         PokemonEntry pokemon = report.getPokemon();
         title.setText(String.format(Locale.ROOT, "#%03d %s", pokemon.getId(), pokemon.getName())
                 + (current.isExact() ? "" : "（模糊匹配）"));
-        showStats(pokemon.getStats());
         content.removeAllViews();
         if (candidates.size() > 1) addCandidates(candidates, selected);
-        addRow("属性", report.getTypes(), report, "");
+        addTypesAndStats(report);
         addRow("本系招式克制", report.getStrongAgainst(), report, "");
         addRow("受到 ×4 伤害", report.getWeak4(), report, "×4");
         addRow("受到 ×2 伤害", report.getWeak2(), report, "×2");
@@ -150,14 +122,43 @@ public class ResultCardView extends LinearLayout {
         content.addView(scroll, new LayoutParams(-1, -2));
     }
 
-    /** Older data files have no stats, in which case the header area stays hidden. */
-    private void showStats(int[] values) {
-        if (values.length != STAT_NAMES.length) {
-            stats.setVisibility(GONE);
-            return;
+    /** Types on the left, base stats in the free space to their right (two columns of three). */
+    private void addTypesAndStats(MatchupReport report) {
+        LinearLayout row = new LinearLayout(getContext());
+        LinearLayout left = new LinearLayout(getContext());
+        left.setOrientation(VERTICAL);
+        left.addView(sectionLabel("属性"));
+        FlowLayout flow = new FlowLayout(getContext(), dp(6));
+        for (int type : report.getTypes()) {
+            String name = report.getTypeNames().get(type);
+            flow.addView(chip(name, typeColor(name)));
         }
-        for (int i = 0; i < STAT_NAMES.length; i++) statCells[i].setText(STAT_NAMES[i] + ":" + values[i]);
-        stats.setVisibility(VISIBLE);
+        left.addView(flow, new LayoutParams(-1, -2));
+        row.addView(left, new LayoutParams(0, -2, 1));
+
+        // Older data files have no stats, in which case only the types are shown.
+        int[] values = report.getPokemon().getStats();
+        if (values.length == STAT_NAMES.length) {
+            LinearLayout grid = new LinearLayout(getContext());
+            grid.setPadding(dp(8), dp(12), 0, 0);
+            int perColumn = STAT_NAMES.length / 2;
+            for (int column = 0; column < 2; column++) {
+                LinearLayout cells = new LinearLayout(getContext());
+                cells.setOrientation(VERTICAL);
+                for (int i = column * perColumn; i < (column + 1) * perColumn; i++) {
+                    TextView cell = label(STAT_NAMES[i] + ":" + values[i]);
+                    cell.setTextSize(12);
+                    cell.setTextColor(0xFFD0D3D8);
+                    cell.setSingleLine(true);
+                    cells.addView(cell, new LayoutParams(-2, -2));
+                }
+                LayoutParams cellsParams = new LayoutParams(-2, -2);
+                if (column > 0) cellsParams.setMargins(dp(10), 0, 0, 0);
+                grid.addView(cells, cellsParams);
+            }
+            row.addView(grid, new LayoutParams(-2, -2));
+        }
+        content.addView(row, new LayoutParams(-1, -2));
     }
 
     private void addRow(String heading, List<Integer> types, MatchupReport report, String suffix) {

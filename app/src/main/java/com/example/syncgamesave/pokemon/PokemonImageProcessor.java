@@ -31,16 +31,20 @@ public final class PokemonImageProcessor {
             new Variant(240, false, true, true),
     };
 
-    /** Number of distinct treatments, which is also the most attempts that make sense. */
-    public static final int MAX_ATTEMPTS = VARIANTS.length;
     private static final int MAX_PIXELS = 3_000_000;
     private static final int MAX_SCALE = 8;
 
     private PokemonImageProcessor() { }
 
+    /**
+     * Attempts beyond the last treatment start over from the first one with a larger target size,
+     * so a high retry count never feeds the recognizer the same image twice.
+     */
     public static Bitmap process(Bitmap source, int attempt) {
-        Variant variant = VARIANTS[Math.max(0, Math.min(attempt, VARIANTS.length - 1))];
-        Bitmap scaled = scale(source, variant.minSide);
+        int index = Math.max(0, attempt);
+        Variant variant = VARIANTS[index % VARIANTS.length];
+        int round = index / VARIANTS.length;
+        Bitmap scaled = scale(source, variant.minSide + variant.minSide * round / 2);
         int width = scaled.getWidth();
         int height = scaled.getHeight();
         int[] pixels = new int[width * height];

@@ -4,8 +4,7 @@ import android.content.Context;
 
 public final class PokemonSettings {
     public static final int DEFAULT_RETRIES = 2;
-    /** One attempt per image treatment, and the first attempt is not a retry. */
-    public static final int MAX_RETRIES = PokemonImageProcessor.MAX_ATTEMPTS - 1;
+    public static final int MAX_RETRIES = 10;
 
     private static final String PREFS = "pokemon_tool";
     private static final String KEY_RETRIES = "retry_count";
