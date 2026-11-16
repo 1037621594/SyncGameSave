@@ -76,7 +76,8 @@ public class PokemonMatcher {
         return kept;
     }
 
-    private static String normalize(String value) {
+    /** Keeps only Chinese characters, so symbols, digits and Latin text such as HP or Lv are dropped. */
+    public static String normalize(String value) {
         return value == null ? "" : NON_CJK.matcher(value).replaceAll("");
     }
 

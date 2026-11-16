@@ -21,6 +21,7 @@ import com.example.syncgamesave.model.PathMapping;
 import com.example.syncgamesave.model.SyncResult;
 import com.example.syncgamesave.model.TaskStatus;
 import com.example.syncgamesave.pokemon.PokemonLaunchActivity;
+import com.example.syncgamesave.pokemon.PokemonSettings;
 import com.example.syncgamesave.sync.SyncController;
 import com.example.syncgamesave.ui.MappingEditorActivity;
 import com.example.syncgamesave.ui.S3BrowserActivity;
@@ -75,10 +76,25 @@ public class MainActivity extends AppCompatActivity {
             else if (item.getItemId() == R.id.menu_s3_browser) browseS3();
             else if (item.getItemId() == R.id.menu_pokemon_tool)
                 startActivity(new Intent(this, PokemonLaunchActivity.class));
+            else if (item.getItemId() == R.id.menu_settings) showSettings();
+            else if (item.getItemId() == R.id.menu_exit) finishAffinity();
             return false;
         });
         controller.changes().observe(this, revision -> { render(); uploadPending(); });
         controller.conflicts().observe(this, this::showConflict);
+    }
+
+    private void showSettings() {
+        String[] items = new String[PokemonSettings.MAX_RETRIES + 1];
+        items[0] = "不重试";
+        for (int i = 1; i < items.length; i++) items[i] = i + " 次";
+        new MaterialAlertDialogBuilder(this).setTitle("宝可梦识别失败重试次数")
+                .setSingleChoiceItems(items, PokemonSettings.retries(this), (dialog, which) -> {
+                    PokemonSettings.setRetries(this, which);
+                    dialog.dismiss();
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     @Override protected void onResume() { super.onResume(); if (container != null) render(); }

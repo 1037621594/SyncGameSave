@@ -74,8 +74,8 @@ public class ResultCardView extends LinearLayout {
         addView(scroll, new LayoutParams(-1, -2));
     }
 
-    public void showLoading() {
-        title.setText("识别中……");
+    public void showLoading(String heading) {
+        title.setText(heading);
         content.removeAllViews();
     }
 

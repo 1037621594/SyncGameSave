@@ -47,9 +47,8 @@ public class PokemonOverlayController {
     private final FrameSource source;
     private final Runnable onExit;
     private final Handler main = new Handler(Looper.getMainLooper());
-    private PokemonOcr ocr;
+    private PokemonRecognizer recognizer;
     private PokemonData data;
-    private PokemonMatcher matcher;
     private TextView ball;
     private WindowManager.LayoutParams ballParams;
     private ResultCardView card;
@@ -75,8 +74,7 @@ public class PokemonOverlayController {
 
     public void start() throws IOException {
         data = PokemonRepository.load(context);
-        matcher = new PokemonMatcher(data);
-        ocr = new PokemonOcr();
+        recognizer = new PokemonRecognizer(new PokemonMatcher(data));
         loadRegion();
         createBall();
         started = true;
@@ -96,9 +94,9 @@ public class PokemonOverlayController {
             try { windowManager.removeView(ball); } catch (RuntimeException ignored) { }
             ball = null;
         }
-        if (ocr != null) {
-            ocr.close();
-            ocr = null;
+        if (recognizer != null) {
+            recognizer.close();
+            recognizer = null;
         }
     }
 
@@ -303,12 +301,17 @@ public class PokemonOverlayController {
         int bottom = clamp(Math.round(fractions.bottom * frame.getHeight()), top + 1, frame.getHeight());
         Bitmap crop = Bitmap.createBitmap(frame, left, top, right - left, bottom - top);
         showCard();
-        card.showLoading();
-        ocr.recognize(crop, new PokemonOcr.Callback() {
-            @Override public void onResult(List<String> lines) {
+        card.showLoading("识别中……");
+        recognizer.recognize(crop, PokemonSettings.retries(context), new PokemonRecognizer.Callback() {
+            @Override public void onAttempt(int attempt, int total) {
+                if (destroyed || card == null) return;
+                card.showLoading(attempt == 1 ? "识别中……" : "识别中……（第 " + attempt + "/" + total + " 次尝试）");
+            }
+
+            @Override public void onResult(List<String> lines, List<MatchCandidate> found, int attempts) {
                 if (destroyed) return;
                 busy = false;
-                showRecognized(lines);
+                showRecognized(lines, found, attempts);
             }
 
             @Override public void onError(Exception error) {
@@ -401,13 +404,20 @@ public class PokemonOverlayController {
 
     // ---- result card ----
 
-    private void showRecognized(List<String> lines) {
+    private void showRecognized(List<String> lines, List<MatchCandidate> found, int attempts) {
         showCard();
-        candidates = matcher.match(lines);
+        candidates = found;
         if (candidates.isEmpty()) {
-            String seen = lines.isEmpty() ? "区域内没有识别到文字，请圈得更贴近宝可梦名字后重试。"
-                    : "识别到的文字：" + String.join(" / ", lines) + "\n名字库中没有匹配项，请重新圈选。";
-            card.showMessage("未识别到宝可梦", seen);
+            // Show only Chinese text, the same way names are matched, so symbols and HP do not clutter the message.
+            List<String> seen = new ArrayList<>();
+            for (String line : lines) {
+                String cleaned = PokemonMatcher.normalize(line);
+                if (!cleaned.isEmpty()) seen.add(cleaned);
+            }
+            String tried = attempts > 1 ? "（已尝试 " + attempts + " 次）" : "";
+            String message = seen.isEmpty() ? "区域内没有识别到汉字，请圈得更贴近宝可梦名字后重试。" + tried
+                    : "识别到的文字：" + String.join(" / ", seen) + "\n名字库中没有匹配项，请重新圈选。" + tried;
+            card.showMessage("未识别到宝可梦", message);
         } else showCandidate(0);
     }
 

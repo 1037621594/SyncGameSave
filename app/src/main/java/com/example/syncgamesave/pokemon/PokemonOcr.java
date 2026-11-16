@@ -16,14 +16,11 @@ public class PokemonOcr {
         void onError(Exception error);
     }
 
-    private static final int MIN_SIDE = 96;
-    private static final int MAX_SCALE = 4;
-
     private final TextRecognizer recognizer =
             TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
 
     public void recognize(Bitmap source, Callback callback) {
-        recognizer.process(InputImage.fromBitmap(enlarge(source), 0))
+        recognizer.process(InputImage.fromBitmap(source, 0))
                 .addOnSuccessListener(text -> {
                     List<String> lines = new ArrayList<>();
                     for (Text.TextBlock block : text.getTextBlocks())
@@ -31,14 +28,6 @@ public class PokemonOcr {
                     callback.onResult(lines);
                 })
                 .addOnFailureListener(callback::onError);
-    }
-
-    /** Small crops are scaled up because game text is often only a few pixels tall. */
-    private static Bitmap enlarge(Bitmap source) {
-        int shortSide = Math.min(source.getWidth(), source.getHeight());
-        if (shortSide >= MIN_SIDE) return source;
-        int scale = Math.min(MAX_SCALE, (MIN_SIDE + shortSide - 1) / shortSide);
-        return Bitmap.createScaledBitmap(source, source.getWidth() * scale, source.getHeight() * scale, true);
     }
 
     public void close() { recognizer.close(); }
