@@ -15,8 +15,10 @@ public final class PokemonAliasStore {
     private static final String PREFS = "pokemon_tool";
     private static final String KEY_ALIASES = "name_aliases";
     private static final String KEY_DEFAULTS_VERSION = "name_aliases_defaults_version";
-    /** Raise this whenever {@link #defaults} gains entries so existing installs receive them once. */
-    private static final int DEFAULTS_VERSION = 2;
+    /** Raise this whenever {@link #defaults} changes so existing installs receive the new entries once. */
+    private static final int DEFAULTS_VERSION = 4;
+    /** Installs older than this version had the whole saved list replaced by the presets; newer bumps only add. */
+    private static final int REPLACED_IN_VERSION = 4;
     private static final Type MAP_TYPE = new TypeToken<LinkedHashMap<String, Integer>>() { }.getType();
 
     private PokemonAliasStore() { }
@@ -24,13 +26,14 @@ public final class PokemonAliasStore {
     public static LinkedHashMap<String, Integer> load(Context context, PokemonData data) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String json = prefs.getString(KEY_ALIASES, null);
-        if (json != null) {
+        int version = prefs.getInt(KEY_DEFAULTS_VERSION, 0);
+        if (json != null && version >= REPLACED_IN_VERSION) {
             try {
                 LinkedHashMap<String, Integer> saved = new Gson().fromJson(json, MAP_TYPE);
                 if (saved != null) {
                     LinkedHashMap<String, Integer> result = clean(saved, data);
-                    if (prefs.getInt(KEY_DEFAULTS_VERSION, 0) < DEFAULTS_VERSION) {
-                        // Add newly shipped defaults once; aliases the user already has are never overwritten.
+                    if (version < DEFAULTS_VERSION) {
+                        // Add newly shipped presets once; aliases the user already has are never overwritten.
                         for (Map.Entry<String, Integer> item : defaults(data).entrySet()) {
                             if (!result.containsKey(item.getKey())) result.put(item.getKey(), item.getValue());
                         }
@@ -62,46 +65,81 @@ public final class PokemonAliasStore {
         return result;
     }
 
+    /** Preset aliases: older official/community translations, listed per generation. Targets are the names in pokemon.json. */
     private static LinkedHashMap<String, Integer> defaults(PokemonData data) {
         LinkedHashMap<String, Integer> result = new LinkedHashMap<>();
-        // Community nicknames, old translations and common misspellings. Targets use the official names in pokemon.json.
-        addDefaults(result, data, "皮卡丘", "皮神", "电耗子");
-        addDefaults(result, data, "喷火龙", "老喷");
-        addDefaults(result, data, "妙蛙花", "蛙花");
-        addDefaults(result, data, "水箭龟", "水箭");
-        addDefaults(result, data, "耿鬼", "老耿");
-        addDefaults(result, data, "班基拉斯", "老班", "班班");
-        addDefaults(result, data, "烈咬陆鲨", "地龙");
-        addDefaults(result, data, "甲贺忍蛙", "水蛙", "忍蛙", "小智蛙");
-        addDefaults(result, data, "路卡利欧", "卢卡利欧", "卢卡", "路卡");
-        addDefaults(result, data, "沙奈朵", "沙奈");
-        addDefaults(result, data, "艾路雷朵", "艾路");
-        addDefaults(result, data, "百变怪", "百变");
-        addDefaults(result, data, "闪电鸟", "电鸟");
-        addDefaults(result, data, "火焰鸟", "火鸟");
-        addDefaults(result, data, "急冻鸟", "冰鸟");
+        // Generation 1
+        addDefaults(result, data, "巴大蝶", "巴大蝴");
+        addDefaults(result, data, "大比鸟", "比雕");
+        addDefaults(result, data, "摩鲁蛾", "末入蛾");
+        addDefaults(result, data, "蚊香君", "蚊香蛙");
+        addDefaults(result, data, "蚊香泳士", "快泳蛙");
+        addDefaults(result, data, "勇基拉", "勇吉拉");
+        addDefaults(result, data, "呆壳兽", "呆河马");
+        addDefaults(result, data, "刺甲贝", "铁甲贝");
+        addDefaults(result, data, "催眠貘", "素利普");
+        addDefaults(result, data, "引梦貘人", "素利拍");
+        addDefaults(result, data, "霹雳电球", "雷电球");
+        addDefaults(result, data, "顽皮雷弹", "顽皮弹");
+        addDefaults(result, data, "卡拉卡拉", "可拉可拉");
+        addDefaults(result, data, "嘎啦嘎啦", "嘎拉嘎拉");
+        addDefaults(result, data, "飞腿郎", "沙瓦郎");
+        addDefaults(result, data, "快拳郎", "艾比郎");
+        addDefaults(result, data, "独角犀牛", "铁甲犀牛");
+        addDefaults(result, data, "钻角犀兽", "铁甲暴龙");
+        addDefaults(result, data, "袋兽", "袋龙");
+        addDefaults(result, data, "魔墙人偶", "吸盘魔偶");
+        addDefaults(result, data, "鸭嘴火兽", "鸭嘴火龙");
+        addDefaults(result, data, "凯罗斯", "大甲");
+        addDefaults(result, data, "拉普拉斯", "乘龙");
         addDefaults(result, data, "水伊布", "水精灵");
         addDefaults(result, data, "雷伊布", "雷精灵");
         addDefaults(result, data, "火伊布", "火精灵");
-        addDefaults(result, data, "太阳伊布", "太阳精灵");
-        addDefaults(result, data, "月亮伊布", "月亮精灵");
-        addDefaults(result, data, "叶伊布", "叶精灵");
-        addDefaults(result, data, "冰伊布", "冰精灵");
-        addDefaults(result, data, "仙子伊布", "仙子精灵");
-        addDefaults(result, data, "洛奇亚", "洛奇");
-        addDefaults(result, data, "凤王", "凤凰");
+        // Generation 2
+        addDefaults(result, data, "大竺葵", "大菊花");
+        addDefaults(result, data, "圆丝蛛", "线球");
+        addDefaults(result, data, "茸茸羊", "绵绵");
+        addDefaults(result, data, "树才怪", "胡说树");
+        addDefaults(result, data, "蚊香蛙皇", "牛蛙君");
+        addDefaults(result, data, "大奶罐", "奶牛坦克");
+        addDefaults(result, data, "太阳伊布", "光伊布");
+        addDefaults(result, data, "月亮伊布", "月伊布");
+        // Generation 3
+        addDefaults(result, data, "巨金怪", "钢螃蟹");
+        addDefaults(result, data, "暴飞龙", "血翼飞龙");
+        addDefaults(result, data, "巨沼怪", "大水怪");
+        addDefaults(result, data, "蜥蜴王", "针叶王");
+        addDefaults(result, data, "火焰鸡", "火鸡战士");
+        addDefaults(result, data, "乐天河童", "荷叶鸭");
+        addDefaults(result, data, "优雅猫", "优雅仙子");
+        addDefaults(result, data, "美纳斯", "美丽龙");
+        addDefaults(result, data, "烈空坐", "裂空座");
+        addDefaults(result, data, "固拉多", "古拉顿");
         addDefaults(result, data, "盖欧卡", "海皇牙");
-        addDefaults(result, data, "固拉多", "古拉顿", "固拉");
-        addDefaults(result, data, "烈空坐", "烈空座", "天空龙");
-        addDefaults(result, data, "骑拉帝纳", "鬼龙", "骑拉");
-        addDefaults(result, data, "代欧奇希斯", "代欧");
-        addDefaults(result, data, "帕路奇亚", "帕路");
-        addDefaults(result, data, "阿尔宙斯", "羊驼", "创世神");
-        addDefaults(result, data, "无极汰那", "无极");
-        addDefaults(result, data, "苍响", "剑狗");
-        addDefaults(result, data, "藏玛然特", "盾狗");
-        addDefaults(result, data, "太乐巴戈斯", "太乐");
-        addDefaults(result, data, "桃歹郎", "桃歹");
+        // Generation 4
+        addDefaults(result, data, "花岩怪", "鬼盆栽", "鬼影盆");
+        addDefaults(result, data, "罗丝雷朵", "假面玫瑰");
+        addDefaults(result, data, "姆克鹰", "椋鹰");
+        addDefaults(result, data, "土台龟", "地壳龟");
+        addDefaults(result, data, "帝王拿波", "钢帝企鹅");
+        addDefaults(result, data, "烈焰猴", "豪火猴");
+        addDefaults(result, data, "帕路奇亚", "帕路奇犽");
+        addDefaults(result, data, "帝牙卢卡", "迪亚鲁加");
+        addDefaults(result, data, "阿尔宙斯", "阿尔修斯", "创世神");
+        // Generation 5
+        addDefaults(result, data, "炒炒猪", "朝阳猪");
+        addDefaults(result, data, "炎武王", "烈焰猪");
+        addDefaults(result, data, "大剑鬼", "大剑海獭");
+        addDefaults(result, data, "君主蛇", "叶皇蛇");
+        addDefaults(result, data, "路卡利欧", "鲁卡力欧");
+        addDefaults(result, data, "捷克罗姆", "黑英雄");
+        addDefaults(result, data, "莱希拉姆", "白英雄");
+        addDefaults(result, data, "酋雷姆", "冰龙");
+        // Generation 6
+        addDefaults(result, data, "妖火红狐", "魔法狐");
+        addDefaults(result, data, "甲贺忍蛙", "忍者蛙");
+        addDefaults(result, data, "布里卡隆", "胖胖哈力");
+        addDefaults(result, data, "坚盾剑怪", "剑盾怪");
         return result;
     }
 
