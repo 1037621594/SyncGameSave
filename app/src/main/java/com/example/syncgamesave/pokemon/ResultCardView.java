@@ -7,7 +7,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
-import android.content.Context;
 import android.text.InputType;
 import android.widget.Button;
 import android.widget.EditText;

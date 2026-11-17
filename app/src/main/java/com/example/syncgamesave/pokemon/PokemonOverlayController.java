@@ -322,7 +322,8 @@ public class PokemonOverlayController {
                 if (destroyed) return;
                 busy = false;
                 showCard();
-                card.showMessage("识别失败", error.getMessage() == null ? "文字识别出错，请重试" : error.getMessage());
+                card.showManualSearch("识别失败", (error.getMessage() == null ? "文字识别出错" : error.getMessage())
+                        + "\n可以直接输入名字搜索。", "");
             }
         });
     }
@@ -419,9 +420,9 @@ public class PokemonOverlayController {
                 if (!cleaned.isEmpty()) seen.add(cleaned);
             }
             String tried = attempts > 1 ? "（已尝试 " + attempts + " 次）" : "";
-            String message = seen.isEmpty() ? "区域内没有识别到汉字，请圈得更贴近宝可梦名字后重试。" + tried
-                    : "识别到的文字：" + String.join(" / ", seen) + "\n名字库中没有匹配项，请重新圈选。" + tried;
-            card.showMessage("未识别到宝可梦", message);
+            String message = seen.isEmpty() ? "区域内没有识别到汉字。可以直接输入名字搜索，或重新圈选。" + tried
+                    : "识别到的文字：" + String.join(" / ", seen) + "\n名字库中没有匹配项。可以直接输入名字搜索，或重新圈选。" + tried;
+            card.showManualSearch("未识别到宝可梦", message, "");
         } else showCandidate(0);
     }
 
@@ -467,7 +468,7 @@ public class PokemonOverlayController {
             return;
         }
         matcher.setAliases(PokemonAliasStore.load(context, data));
-        candidates = matcher.match(java.util.Collections.singletonList(query.trim()));
+        candidates = matcher.search(query.trim());
         if (candidates.isEmpty()) {
             card.showManualSearch("未找到宝可梦", "没有找到匹配项，请检查名称后重试。", query.trim());
         } else showCandidate(0);

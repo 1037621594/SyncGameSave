@@ -12,6 +12,7 @@ import lombok.AllArgsConstructor;
 public class PokemonMatcher {
     private static final Pattern NON_CJK = Pattern.compile("[^\\u4e00-\\u9fff]");
     private static final int MAX_CANDIDATES = 5;
+    private static final int SEARCH_LIMIT = 10;
 
     @AllArgsConstructor
     private static class Indexed {
@@ -77,6 +78,56 @@ public class PokemonMatcher {
             return byLength != 0 ? byLength : Integer.compare(a.getPokemon().getId(), b.getPokemon().getId());
         });
         return result.size() > MAX_CANDIDATES ? new ArrayList<>(result.subList(0, MAX_CANDIDATES)) : result;
+    }
+
+    /** Fuzzy lookup for typed queries: official names and aliases, partial or slightly misspelled input allowed. */
+    public synchronized List<MatchCandidate> search(String query) {
+        List<MatchCandidate> found = new ArrayList<>();
+        for (Indexed item : index) {
+            int rank = searchRank(item.name, query);
+            if (rank >= 0) found.add(new MatchCandidate(item.entry, 1.0 - rank * 0.1, rank == 0));
+        }
+        List<MatchCandidate> result = uniqueByPokemon(found);
+        Collections.sort(result, (a, b) -> {
+            int byScore = Double.compare(b.getScore(), a.getScore());
+            if (byScore != 0) return byScore;
+            int byLength = Integer.compare(normalize(a.getPokemon().getName()).length(),
+                    normalize(b.getPokemon().getName()).length());
+            return byLength != 0 ? byLength : Integer.compare(a.getPokemon().getId(), b.getPokemon().getId());
+        });
+        return result.size() > SEARCH_LIMIT ? new ArrayList<>(result.subList(0, SEARCH_LIMIT)) : result;
+    }
+
+    /** Official names that loosely match the query, best match first. An empty query returns everything. */
+    public static List<PokemonEntry> searchOfficial(List<PokemonEntry> pokemon, String query) {
+        if (normalize(query).isEmpty()) return new ArrayList<>(pokemon);
+        List<PokemonEntry> hits = new ArrayList<>();
+        List<Integer> ranks = new ArrayList<>();
+        for (PokemonEntry entry : pokemon) {
+            int rank = searchRank(normalize(entry.getName()), query);
+            if (rank < 0) continue;
+            int at = 0;
+            while (at < hits.size() && ranks.get(at) <= rank) at++;
+            hits.add(at, entry);
+            ranks.add(at, rank);
+        }
+        return hits;
+    }
+
+    /** 0 exact, 1 prefix, 2 contains, 3 characters in order, 4 one wrong character; -1 when there is no match. */
+    private static int searchRank(String name, String query) {
+        String wanted = normalize(query);
+        if (wanted.isEmpty() || name.isEmpty()) return -1;
+        if (name.equals(wanted)) return 0;
+        if (name.startsWith(wanted)) return 1;
+        if (name.contains(wanted)) return 2;
+        int at = 0;
+        for (int i = 0; i < name.length() && at < wanted.length(); i++) {
+            if (name.charAt(i) == wanted.charAt(at)) at++;
+        }
+        if (at == wanted.length()) return 3;
+        if (wanted.length() >= 3 && distance(wanted, name) <= 1) return 4;
+        return -1;
     }
 
     private static List<MatchCandidate> uniqueByPokemon(List<MatchCandidate> candidates) {

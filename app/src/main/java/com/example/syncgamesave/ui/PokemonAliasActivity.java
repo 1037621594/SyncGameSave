@@ -1,10 +1,14 @@
 package com.example.syncgamesave.ui;
 
+import android.content.Context;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
+import android.widget.Filter;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -93,13 +97,23 @@ public class PokemonAliasActivity extends AppCompatActivity {
         AutoCompleteTextView targetInput = new AutoCompleteTextView(this);
         targetInput.setSingleLine(true);
         targetInput.setThreshold(1);
-        List<String> names = new ArrayList<>();
-        for (PokemonEntry pokemon : data.getPokemon()) names.add(pokemon.getName());
-        targetInput.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, names));
+        targetInput.setAdapter(new FuzzyNameAdapter(this, data.getPokemon()));
+        // The official name can only be chosen from the dropdown; typing merely narrows the list.
+        PokemonEntry[] chosen = new PokemonEntry[1];
         if (oldId != null) {
-            PokemonEntry selected = PokemonAliasStore.findById(data.getPokemon(), oldId);
-            if (selected != null) targetInput.setText(selected.getName(), false);
+            chosen[0] = PokemonAliasStore.findById(data.getPokemon(), oldId);
+            if (chosen[0] != null) targetInput.setText(chosen[0].getName(), false);
         }
+        targetInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+            @Override public void afterTextChanged(Editable s) {
+                if (chosen[0] != null && !chosen[0].getName().contentEquals(s)) chosen[0] = null;
+                targetLayout.setError(null);
+            }
+        });
+        targetInput.setOnItemClickListener((parent, view, position, id) ->
+                chosen[0] = PokemonAliasStore.findByName(data.getPokemon(), String.valueOf(parent.getItemAtPosition(position))));
         targetLayout.addView(targetInput, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams targetParams = new LinearLayout.LayoutParams(-1, -2);
         targetParams.bottomMargin = Ui.dp(this, 12);
@@ -114,13 +128,13 @@ public class PokemonAliasActivity extends AppCompatActivity {
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
             String alias = Ui.value(aliasInput);
             String normalized = PokemonMatcher.normalize(alias);
-            PokemonEntry target = PokemonAliasStore.findByName(data.getPokemon(), targetInput.getText().toString());
+            PokemonEntry target = chosen[0];
             if (normalized.isEmpty()) {
                 aliasInput.setError("请输入至少一个汉字");
                 return;
             }
             if (target == null) {
-                targetLayout.setError("请从列表中选择官方名称");
+                targetLayout.setError("请从下拉列表中选择官方名称");
                 return;
             }
             targetLayout.setError(null);
@@ -148,6 +162,42 @@ public class PokemonAliasActivity extends AppCompatActivity {
             dialog.dismiss();
         }));
         dialog.show();
+    }
+
+    /** Dropdown of official names whose filter accepts partial and slightly misspelled input. */
+    private static class FuzzyNameAdapter extends ArrayAdapter<String> {
+        private final List<PokemonEntry> all;
+
+        FuzzyNameAdapter(Context context, List<PokemonEntry> all) {
+            super(context, android.R.layout.simple_dropdown_item_1line, new ArrayList<>());
+            this.all = all;
+        }
+
+        @Override public Filter getFilter() {
+            return new Filter() {
+                @Override protected FilterResults performFiltering(CharSequence constraint) {
+                    List<String> names = new ArrayList<>();
+                    for (PokemonEntry entry : PokemonMatcher.searchOfficial(all, String.valueOf(constraint))) {
+                        names.add(entry.getName());
+                    }
+                    FilterResults results = new FilterResults();
+                    results.values = names;
+                    results.count = names.size();
+                    return results;
+                }
+
+                @SuppressWarnings("unchecked")
+                @Override protected void publishResults(CharSequence constraint, FilterResults results) {
+                    clear();
+                    addAll((List<String>) results.values);
+                    notifyDataSetChanged();
+                }
+
+                @Override public CharSequence convertResultToString(Object resultValue) {
+                    return String.valueOf(resultValue);
+                }
+            };
+        }
     }
 
     private void confirmDelete(String alias) {
