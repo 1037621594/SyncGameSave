@@ -27,7 +27,7 @@
         <service android:name=".pokemon.PokemonOverlayService" android:exported="false"
             android:foregroundServiceType="mediaProjection" />
         <service android:name=".pokemon.PokemonAccessibilityService" android:exported="true"
-            android:label="宝可梦工具截屏"
+            android:label="游戏工具"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

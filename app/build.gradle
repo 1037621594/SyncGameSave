@@ -55,6 +55,10 @@ dependencies {
     implementation 'com.amazonaws:aws-android-sdk-core:2.81.1'
     // Bundled Chinese text model: works offline and without Google Play services.
     implementation 'com.google.mlkit:text-recognition-chinese:16.0.0'
+    // Bundled Japanese (and Latin) text model for screenshot translation.
+    implementation 'com.google.mlkit:text-recognition-japanese:16.0.0'
+    // On-device translation; language models are downloaded once on first use.
+    implementation 'com.google.mlkit:translate:17.0.3'
     compileOnly 'org.projectlombok:lombok:1.18.36'
     annotationProcessor 'org.projectlombok:lombok:1.18.36'
 }
