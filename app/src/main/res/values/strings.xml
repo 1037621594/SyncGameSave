@@ -2,5 +2,5 @@
     <string name="app_name">存档同步</string>
     <string name="drawer_open">打开侧边栏</string>
     <string name="drawer_close">关闭侧边栏</string>
-    <string name="pokemon_accessibility_description">仅用于点击悬浮球时截取一张屏幕画面，供宝可梦识别和截图翻译使用，不读取界面内容，也不会持续录屏。</string>
+    <string name="pokemon_accessibility_description">仅用于点击悬浮球时截取一张屏幕画面来识别宝可梦名字，不读取界面内容，也不会持续录屏。</string>
 </resources>

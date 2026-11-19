@@ -20,7 +20,6 @@ import android.view.WindowManager;
 import android.widget.Toast;
 import androidx.core.app.NotificationCompat;
 import com.example.syncgamesave.R;
-import com.example.syncgamesave.translate.TranslateOverlayController;
 
 /**
  * Fallback host that captures the screen with MediaProjection. It is used below Android 11 or when the
@@ -38,14 +37,14 @@ public class PokemonOverlayService extends Service {
     private MediaProjection projection;
     private MediaProjection.Callback projectionCallback;
     private ScreenCapture capture;
-    private OverlayTool controller;
+    private PokemonOverlayController controller;
 
     @Override public IBinder onBind(Intent intent) { return null; }
 
     @Override public void onCreate() {
         super.onCreate();
         if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "游戏工具",
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "宝可梦工具",
                     NotificationManager.IMPORTANCE_LOW);
             ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
         }
@@ -56,21 +55,19 @@ public class PokemonOverlayService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
-        boolean translate = OverlayTool.MODE_TRANSLATE.equals(intent.getStringExtra(OverlayTool.EXTRA_MODE));
         // The system requires startForeground shortly after startForegroundService, even for a repeated start.
-        startInForeground(translate);
+        startInForeground();
         if (controller != null) return START_NOT_STICKY;
         try {
             if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(this))
                 throw new IllegalStateException("未授予悬浮窗权限");
             startProjection(intent);
-            controller = translate ? new TranslateOverlayController(this, overlayType(), capture, this::stopSelf)
-                    : new PokemonOverlayController(this, overlayType(), capture, this::stopSelf);
+            controller = new PokemonOverlayController(this, overlayType(), capture, this::stopSelf);
             controller.start();
         } catch (Exception e) {
             String message = e.getMessage();
-            Toast.makeText(this, (translate ? "截图翻译" : "宝可梦工具") + "启动失败："
-                    + (message == null ? e.getClass().getSimpleName() : message), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "宝可梦工具启动失败：" + (message == null ? e.getClass().getSimpleName() : message),
+                    Toast.LENGTH_LONG).show();
             stopSelf();
         }
         return START_NOT_STICKY;
@@ -91,14 +88,14 @@ public class PokemonOverlayService extends Service {
         super.onDestroy();
     }
 
-    private void startInForeground(boolean translate) {
+    private void startInForeground() {
         Intent stop = new Intent(this, PokemonOverlayService.class).setAction(ACTION_STOP);
         PendingIntent stopIntent = PendingIntent.getService(this, 0, stop,
                 PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher)
-                .setContentTitle(translate ? "截图翻译运行中" : "宝可梦工具运行中")
-                .setContentText(translate ? "点击悬浮球翻译屏幕文字" : "点击悬浮球识别宝可梦")
+                .setContentTitle("宝可梦工具运行中")
+                .setContentText("点击悬浮球识别宝可梦")
                 .setOngoing(true)
                 .addAction(0, "退出", stopIntent)
                 .build();

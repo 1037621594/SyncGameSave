@@ -31,7 +31,7 @@ import java.util.List;
  * Floating ball, region selection layer, long-press menu and result card. The host (a foreground service
  * or the accessibility service) supplies the window type and the screenshot source.
  */
-public class PokemonOverlayController implements OverlayTool {
+public class PokemonOverlayController {
     private static final String PREFS = "pokemon_tool";
     private static final String KEY_LEFT = "region_left";
     private static final String KEY_TOP = "region_top";
@@ -74,7 +74,7 @@ public class PokemonOverlayController implements OverlayTool {
 
     public static boolean isActive() { return active; }
 
-    @Override public void start() throws IOException {
+    public void start() throws IOException {
         data = PokemonRepository.load(context);
         matcher = new PokemonMatcher(data, PokemonAliasStore.load(context, data));
         recognizer = new PokemonRecognizer(matcher);
@@ -86,7 +86,7 @@ public class PokemonOverlayController implements OverlayTool {
     }
 
     /** Safe to call on a controller whose start() failed part way. */
-    @Override public void stop() {
+    public void stop() {
         destroyed = true;
         if (started) active = false;
         main.removeCallbacksAndMessages(null);
@@ -103,7 +103,7 @@ public class PokemonOverlayController implements OverlayTool {
         }
     }
 
-    @Override public void onConfigurationChanged() {
+    public void onConfigurationChanged() {
         if (!started || destroyed) return;
         if (selection != null) cancelSelection();
         removeMenu();

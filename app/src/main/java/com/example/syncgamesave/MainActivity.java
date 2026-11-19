@@ -20,7 +20,6 @@ import com.example.syncgamesave.model.ConflictRequest;
 import com.example.syncgamesave.model.PathMapping;
 import com.example.syncgamesave.model.SyncResult;
 import com.example.syncgamesave.model.TaskStatus;
-import com.example.syncgamesave.pokemon.OverlayTool;
 import com.example.syncgamesave.pokemon.PokemonLaunchActivity;
 import com.example.syncgamesave.sync.SyncController;
 import com.example.syncgamesave.ui.MappingEditorActivity;
@@ -76,11 +75,7 @@ public class MainActivity extends AppCompatActivity {
             else if (item.getItemId() == R.id.menu_s3_config) editConfig();
             else if (item.getItemId() == R.id.menu_s3_browser) browseS3();
             else if (item.getItemId() == R.id.menu_pokemon_tool)
-                startActivity(new Intent(this, PokemonLaunchActivity.class)
-                        .putExtra(OverlayTool.EXTRA_MODE, OverlayTool.MODE_POKEMON));
-            else if (item.getItemId() == R.id.menu_translate_tool)
-                startActivity(new Intent(this, PokemonLaunchActivity.class)
-                        .putExtra(OverlayTool.EXTRA_MODE, OverlayTool.MODE_TRANSLATE));
+                startActivity(new Intent(this, PokemonLaunchActivity.class));
             else if (item.getItemId() == R.id.menu_settings) startActivity(new Intent(this, SettingsActivity.class));
             else if (item.getItemId() == R.id.menu_exit) finishAffinity();
             return false;

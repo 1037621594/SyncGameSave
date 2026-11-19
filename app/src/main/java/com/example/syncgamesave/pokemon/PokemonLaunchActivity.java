@@ -19,21 +19,19 @@ import androidx.core.content.ContextCompat;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 /**
- * Starts a game tool (Pokemon recognition or screenshot translation), chosen by the {@link OverlayTool#EXTRA_MODE}
- * extra. Android 11+ starts it through the accessibility service, which needs no per-launch authorization.
+ * Android 11+ starts the tool through the accessibility service, which needs no per-launch authorization.
  * Otherwise it walks through overlay, notification and screen-capture permissions for the projection service.
  */
 public class PokemonLaunchActivity extends AppCompatActivity {
-    private String mode = OverlayTool.MODE_POKEMON;
     private final ActivityResultLauncher<Intent> accessibilitySettings = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (PokemonAccessibilityService.isConnected()) startWithAccessibility();
-                else fail("无障碍服务未开启，" + toolName() + "无法启动");
+                else fail("无障碍服务未开启，宝可梦工具无法启动");
             });
     private final ActivityResultLauncher<Intent> overlaySettings = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (hasOverlayPermission()) requestNotification();
-                else fail("未授予悬浮窗权限，" + toolName() + "无法启动");
+                else fail("未授予悬浮窗权限，宝可梦工具无法启动");
             });
     private final ActivityResultLauncher<String> notificationPermission = registerForActivityResult(
             new ActivityResultContracts.RequestPermission(), granted -> requestProjection());
@@ -41,12 +39,11 @@ public class PokemonLaunchActivity extends AppCompatActivity {
             new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                     Intent service = new Intent(this, PokemonOverlayService.class)
-                            .putExtra(OverlayTool.EXTRA_MODE, mode)
                             .putExtra(PokemonOverlayService.EXTRA_RESULT_CODE, result.getResultCode())
                             .putExtra(PokemonOverlayService.EXTRA_DATA, result.getData());
                     ContextCompat.startForegroundService(this, service);
                     finish();
-                } else fail("未授予录屏权限，" + toolName() + "无法启动");
+                } else fail("未授予录屏权限，宝可梦工具无法启动");
             });
 
     @Override protected void onCreate(Bundle state) {
@@ -55,10 +52,8 @@ public class PokemonLaunchActivity extends AppCompatActivity {
             finish();
             return;
         }
-        if (OverlayTool.MODE_TRANSLATE.equals(getIntent().getStringExtra(OverlayTool.EXTRA_MODE)))
-            mode = OverlayTool.MODE_TRANSLATE;
-        if (PokemonAccessibilityService.isToolActive()) {
-            fail("游戏工具已在运行，长按悬浮球打开菜单可退出后再启动其他工具");
+        if (PokemonOverlayController.isActive()) {
+            fail("宝可梦工具已在运行，长按悬浮球打开菜单可退出");
         } else if (Build.VERSION.SDK_INT >= 30) {
             if (PokemonAccessibilityService.isConnected()) startWithAccessibility();
             else askAccessibility();
@@ -70,7 +65,7 @@ public class PokemonLaunchActivity extends AppCompatActivity {
     private void askAccessibility() {
         new MaterialAlertDialogBuilder(this).setTitle("开启无障碍截屏")
                 .setMessage("开启后，点击悬浮球即可直接截屏识别，不用每次授权录屏，也不会持续录屏。"
-                        + "请在无障碍设置中找到“游戏工具”并开启。该服务只用来截取屏幕，不读取界面内容。")
+                        + "请在无障碍设置中找到“宝可梦工具截屏”并开启。该服务只用来截取屏幕，不读取界面内容。")
                 .setPositiveButton("去开启", (dialog, which) -> openAccessibilitySettings())
                 .setNegativeButton("使用录屏方式", (dialog, which) -> startWithProjection())
                 .setNeutralButton("取消", (dialog, which) -> finish())
@@ -82,16 +77,12 @@ public class PokemonLaunchActivity extends AppCompatActivity {
         try {
             accessibilitySettings.launch(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
         } catch (ActivityNotFoundException e) {
-            fail("系统没有无障碍设置页，请在系统设置中手动开启“游戏工具”");
+            fail("系统没有无障碍设置页，请在系统设置中手动开启“宝可梦工具截屏”");
         }
     }
 
-    private String toolName() {
-        return OverlayTool.MODE_TRANSLATE.equals(mode) ? "截图翻译" : "宝可梦工具";
-    }
-
     private void startWithAccessibility() {
-        String error = PokemonAccessibilityService.startTool(mode);
+        String error = PokemonAccessibilityService.startTool();
         if (error != null) Toast.makeText(this, error, Toast.LENGTH_LONG).show();
         finish();
     }
@@ -101,7 +92,7 @@ public class PokemonLaunchActivity extends AppCompatActivity {
     private void startWithProjection() {
         if (!hasOverlayPermission()) {
             new MaterialAlertDialogBuilder(this).setTitle("需要悬浮窗权限")
-                    .setMessage(toolName() + "需要在游戏上方显示悬浮球和结果。请在接下来的设置页中允许“显示在其他应用的上层”。")
+                    .setMessage("宝可梦工具需要在游戏上方显示悬浮球和识别结果。请在接下来的设置页中允许“显示在其他应用的上层”。")
                     .setNegativeButton("取消", (dialog, which) -> finish())
                     .setPositiveButton("去设置", (dialog, which) -> openOverlaySettings())
                     .setOnCancelListener(dialog -> finish())

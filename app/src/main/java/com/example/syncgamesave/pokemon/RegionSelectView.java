@@ -18,7 +18,6 @@ public class RegionSelectView extends View {
     }
 
     private final Bitmap frame;
-    private final String hint;
     private final Listener listener;
     private final Paint bitmapPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     private final Paint dimPaint = new Paint();
@@ -32,13 +31,8 @@ public class RegionSelectView extends View {
     private boolean hasRegion;
 
     public RegionSelectView(Context context, Bitmap frame, Listener listener) {
-        this(context, frame, "拖动手指圈出宝可梦名字所在区域", listener);
-    }
-
-    public RegionSelectView(Context context, Bitmap frame, String hint, Listener listener) {
         super(context);
         this.frame = frame;
-        this.hint = hint;
         this.listener = listener;
         float density = context.getResources().getDisplayMetrics().density;
         minSize = 24 * density;
@@ -63,7 +57,7 @@ public class RegionSelectView extends View {
             canvas.restore();
             canvas.drawRect(region, borderPaint);
         } else {
-            canvas.drawText(hint, getWidth() / 2f, getHeight() / 2f, hintPaint);
+            canvas.drawText("拖动手指圈出宝可梦名字所在区域", getWidth() / 2f, getHeight() / 2f, hintPaint);
         }
     }
 
