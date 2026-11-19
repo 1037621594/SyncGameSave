@@ -16,7 +16,7 @@ public final class PokemonAliasStore {
     private static final String KEY_ALIASES = "name_aliases";
     private static final String KEY_DEFAULTS_VERSION = "name_aliases_defaults_version";
     /** Raise this whenever {@link #defaults} changes so existing installs receive the new entries once. */
-    private static final int DEFAULTS_VERSION = 4;
+    private static final int DEFAULTS_VERSION = 5;
     /** Installs older than this version had the whole saved list replaced by the presets; newer bumps only add. */
     private static final int REPLACED_IN_VERSION = 4;
     private static final Type MAP_TYPE = new TypeToken<LinkedHashMap<String, Integer>>() { }.getType();
@@ -102,8 +102,8 @@ public final class PokemonAliasStore {
         addDefaults(result, data, "树才怪", "胡说树");
         addDefaults(result, data, "蚊香蛙皇", "牛蛙君");
         addDefaults(result, data, "大奶罐", "奶牛坦克");
-        addDefaults(result, data, "太阳伊布", "光伊布");
-        addDefaults(result, data, "月亮伊布", "月伊布");
+        addDefaults(result, data, "太阳伊布", "光伊布", "太阳精灵");
+        addDefaults(result, data, "月亮伊布", "月伊布", "月亮精灵");
         // Generation 3
         addDefaults(result, data, "巨金怪", "钢螃蟹");
         addDefaults(result, data, "暴飞龙", "血翼飞龙");
@@ -126,6 +126,8 @@ public final class PokemonAliasStore {
         addDefaults(result, data, "帕路奇亚", "帕路奇犽");
         addDefaults(result, data, "帝牙卢卡", "迪亚鲁加");
         addDefaults(result, data, "阿尔宙斯", "阿尔修斯", "创世神");
+        addDefaults(result, data, "叶伊布", "叶精灵");
+        addDefaults(result, data, "冰伊布", "冰精灵");
         // Generation 5
         addDefaults(result, data, "炒炒猪", "朝阳猪");
         addDefaults(result, data, "炎武王", "烈焰猪");
@@ -140,6 +142,7 @@ public final class PokemonAliasStore {
         addDefaults(result, data, "甲贺忍蛙", "忍者蛙");
         addDefaults(result, data, "布里卡隆", "胖胖哈力");
         addDefaults(result, data, "坚盾剑怪", "剑盾怪");
+        addDefaults(result, data, "仙子伊布", "仙子精灵");
         return result;
     }
 
