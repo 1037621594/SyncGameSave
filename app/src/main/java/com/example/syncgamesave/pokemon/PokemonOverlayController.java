@@ -55,6 +55,13 @@ public class PokemonOverlayController {
     private ResultCardView card;
     private WindowManager.LayoutParams cardParams;
     private LinearLayout menu;
+    /** Kept after the window is closed so the page and its history survive until the tool stops. */
+    private GuideBrowserView browser;
+    private WindowManager.LayoutParams browserParams;
+    /** Name of the Pokemon currently on the result card, used to prefill the guide search. */
+    private String shownName;
+    /** Pokemon the browser last searched for automatically, so reopening does not repeat the search. */
+    private String guideName;
     /** Last selected region as fractions of the screen, valid only for the screen size it was selected on. */
     private RectF savedRegion;
     private Point savedScreen;
@@ -93,6 +100,11 @@ public class PokemonOverlayController {
         removeSelection();
         removeMenu();
         removeCard();
+        removeBrowser();
+        if (browser != null) {
+            browser.destroy();
+            browser = null;
+        }
         if (ball != null) {
             try { windowManager.removeView(ball); } catch (RuntimeException ignored) { }
             ball = null;
@@ -108,6 +120,7 @@ public class PokemonOverlayController {
         if (selection != null) cancelSelection();
         removeMenu();
         removeCard();
+        removeBrowser();
         clampBall();
     }
 
@@ -334,7 +347,7 @@ public class PokemonOverlayController {
         if (busy || menu != null || ball == null) return;
         Point size = ScreenCapture.realSize(windowManager);
         int width = dp(120);
-        int height = dp(96);
+        int height = dp(144);
         LinearLayout view = new LinearLayout(context);
         view.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable background = new GradientDrawable();
@@ -344,6 +357,10 @@ public class PokemonOverlayController {
         view.addView(menuItem("修改区域", () -> {
             removeMenu();
             if (!busy && !destroyed) startCapture(true);
+        }));
+        view.addView(menuItem("攻略搜索", () -> {
+            removeMenu();
+            if (!destroyed) showBrowser();
         }));
         view.addView(menuItem("退出", () -> {
             removeMenu();
@@ -428,6 +445,7 @@ public class PokemonOverlayController {
 
     private void showCandidate(int index) {
         if (card == null || index < 0 || index >= candidates.size()) return;
+        shownName = candidates.get(index).getPokemon().getName();
         MatchupReport report = TypeMatchups.analyze(data, candidates.get(index).getPokemon());
         card.showReport(candidates, index, report);
     }
@@ -484,6 +502,77 @@ public class PokemonOverlayController {
                     (android.view.inputmethod.InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
             if (inputMethod != null) inputMethod.hideSoftInputFromWindow(card.getWindowToken(), 0);
         }
+    }
+
+    // ---- guide browser ----
+
+    private void showBrowser() {
+        if (browserParams != null) return;
+        if (browser == null) {
+            try {
+                browser = new GuideBrowserView(context, new GuideBrowserView.Listener() {
+                    @Override public void onClose() { removeBrowser(); }
+                    @Override public void onInputModeChanged(boolean enabled) { setBrowserInputMode(enabled); }
+                });
+            } catch (RuntimeException e) {
+                Toast.makeText(context, "无法创建浏览器：" + e.getMessage(), Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+        Point size = ScreenCapture.realSize(windowManager);
+        boolean landscape = size.x > size.y;
+        int margin = dp(12);
+        WindowManager.LayoutParams params;
+        if (landscape) {
+            // Leave the left half free so the game stays visible while reading.
+            params = overlayParams(Math.round(size.x * 0.5f), size.y - 2 * margin,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+            params.gravity = Gravity.TOP | Gravity.END;
+            params.x = margin;
+            params.y = margin;
+        } else {
+            params = overlayParams(size.x - 2 * margin, Math.round(size.y * 0.6f),
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+            params.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+            params.y = dp(24);
+        }
+        // Windows added through WindowManager are not hardware accelerated by default, which WebView needs.
+        params.flags |= WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
+        try {
+            windowManager.addView(browser, params);
+        } catch (RuntimeException e) {
+            Toast.makeText(context, "无法显示浏览器：" + e.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
+        browserParams = params;
+        browser.onShow();
+        // Windows added later sit on top, so re-add the ball to keep it reachable above the browser.
+        if (ball != null) {
+            windowManager.removeView(ball);
+            windowManager.addView(ball, ballParams);
+        }
+        if (shownName != null && !shownName.equals(guideName)) {
+            guideName = shownName;
+            browser.prefill(shownName + " 宝可梦 攻略");
+            browser.search(shownName + " 宝可梦 攻略");
+        } else if (!browser.hasPage()) {
+            browser.focusInput();
+        }
+    }
+
+    /** Hides the browser window. The page is kept and shown again by the next showBrowser(). */
+    private void removeBrowser() {
+        if (browserParams == null || browser == null) return;
+        browser.onHide();
+        try { windowManager.removeView(browser); } catch (RuntimeException ignored) { }
+        browserParams = null;
+    }
+
+    private void setBrowserInputMode(boolean enabled) {
+        if (browser == null || browserParams == null) return;
+        if (enabled) browserParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        else browserParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        try { windowManager.updateViewLayout(browser, browserParams); } catch (RuntimeException ignored) { }
     }
 
     // ---- helpers ----
