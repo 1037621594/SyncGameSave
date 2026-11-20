@@ -39,6 +39,7 @@ public class PokemonOverlayController {
     private static final String KEY_BOTTOM = "region_bottom";
     private static final String KEY_SCREEN_W = "screen_width";
     private static final String KEY_SCREEN_H = "screen_height";
+    private static final String KEY_BROWSER_MODE = "last_action_browser";
     private static volatile boolean active;
 
     private final Context context;
@@ -58,6 +59,8 @@ public class PokemonOverlayController {
     /** Kept after the window is closed so the page and its history survive until the tool stops. */
     private GuideBrowserView browser;
     private WindowManager.LayoutParams browserParams;
+    /** True when the last thing the user opened was the guide browser; a ball tap then opens it again instead of recognizing. */
+    private boolean browserMode;
     /** Name of the Pokemon currently on the result card, used to prefill the guide search. */
     private String shownName;
     /** Pokemon the browser last searched for automatically, so reopening does not repeat the search. */
@@ -86,10 +89,12 @@ public class PokemonOverlayController {
         matcher = new PokemonMatcher(data, PokemonAliasStore.load(context, data));
         recognizer = new PokemonRecognizer(matcher);
         loadRegion();
+        browserMode = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_BROWSER_MODE, false);
         createBall();
         started = true;
         active = true;
-        Toast.makeText(context, "宝可梦工具已启动：点击悬浮球识别，长按悬浮球打开菜单", Toast.LENGTH_LONG).show();
+        Toast.makeText(context, "宝可梦工具已启动：点击悬浮球重复上次操作（识别或攻略搜索），长按悬浮球打开菜单",
+                Toast.LENGTH_LONG).show();
     }
 
     /** Safe to call on a controller whose start() failed part way. */
@@ -218,6 +223,12 @@ public class PokemonOverlayController {
     private void onBallClick() {
         if (busy || destroyed) return;
         removeMenu();
+        if (browserMode) {
+            // A second tap hides the browser, so it can be dismissed without reaching for its close button.
+            if (browserParams != null) removeBrowser();
+            else showBrowser();
+            return;
+        }
         boolean select = !hasSavedRegion();
         if (select && savedRegion != null)
             Toast.makeText(context, "屏幕尺寸已变化，请重新圈选区域", Toast.LENGTH_SHORT).show();
@@ -225,8 +236,11 @@ public class PokemonOverlayController {
     }
 
     private void startCapture(boolean select) {
+        setBrowserMode(false);
         busy = true;
         removeCard();
+        // The browser would be captured along with the game and cover the region being recognized.
+        removeBrowser();
         setBallVisible(false);
         source.capture(new FrameSource.Callback() {
             @Override public void onFrame(Bitmap frame) {
@@ -347,13 +361,18 @@ public class PokemonOverlayController {
         if (busy || menu != null || ball == null) return;
         Point size = ScreenCapture.realSize(windowManager);
         int width = dp(120);
-        int height = dp(144);
+        int height = dp(192);
         LinearLayout view = new LinearLayout(context);
         view.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable background = new GradientDrawable();
         background.setColor(0xF2202124);
         background.setCornerRadius(dp(12));
         view.setBackground(background);
+        view.addView(menuItem("识别宝可梦", () -> {
+            removeMenu();
+            setBrowserMode(false);
+            onBallClick();
+        }));
         view.addView(menuItem("修改区域", () -> {
             removeMenu();
             if (!busy && !destroyed) startCapture(true);
@@ -545,6 +564,7 @@ public class PokemonOverlayController {
             return;
         }
         browserParams = params;
+        setBrowserMode(true);
         browser.onShow();
         // Windows added later sit on top, so re-add the ball to keep it reachable above the browser.
         if (ball != null) {
@@ -566,6 +586,12 @@ public class PokemonOverlayController {
         browser.onHide();
         try { windowManager.removeView(browser); } catch (RuntimeException ignored) { }
         browserParams = null;
+    }
+
+    private void setBrowserMode(boolean enabled) {
+        if (browserMode == enabled) return;
+        browserMode = enabled;
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_BROWSER_MODE, enabled).apply();
     }
 
     private void setBrowserInputMode(boolean enabled) {
