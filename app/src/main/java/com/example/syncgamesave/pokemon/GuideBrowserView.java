@@ -33,7 +33,7 @@ public class GuideBrowserView extends LinearLayout {
     private final float density;
     private final EditText input;
     private final TextView back;
-    private final WebView web;
+    private WebView web;
     private boolean inputMode;
     private boolean loaded;
 
